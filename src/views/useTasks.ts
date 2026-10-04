@@ -49,6 +49,9 @@ function rootOf(projects: Project[], id: string): string {
   return p?.id ?? id
 }
 
+/** Short, readable reason from a failed Todoist call. */
+const why = (e: unknown) => (e instanceof Error && e.message ? ` (${e.message})` : '')
+
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i])
 
 export function useTasks() {
@@ -110,7 +113,7 @@ export function useTasks() {
       try {
         await taskSource.completeTask(id)
         if (task.recurring) void load() // pick up the next occurrence
-      } catch {
+      } catch (e) {
         if (task.recurring) {
           setTicked((s) => {
             const n = new Set(s)
@@ -124,7 +127,7 @@ export function useTasks() {
             return { ...s, tasks }
           })
         }
-        toast('Could not complete that task. It is back on the list.')
+        toast(`Could not complete that task${why(e)}. It is back on the list.`)
       } finally {
         inFlight.current.delete(id)
       }
@@ -151,9 +154,9 @@ export function useTasks() {
         const real = await taskSource.createTask({ ...input, content: text })
         setState((s) => ({ ...s, tasks: s.tasks.map((t) => (t.id === tmp.id ? real : t)) }))
         return true
-      } catch {
+      } catch (e) {
         setState((s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== tmp.id) }))
-        toast('Could not add that task.')
+        toast(`Could not add that task${why(e)}.`)
         return false
       }
     },
@@ -185,13 +188,13 @@ export function useTasks() {
           moved = true
         }
         if (labelsChanged) await taskSource.setLabels(id, labels)
-      } catch {
+      } catch (e) {
         if (moved) {
-          toast('Moved, but could not change the subgoal. Showing what Todoist has.')
+          toast(`Moved, but could not change the subgoal${why(e)}. Showing what Todoist has.`)
           void load()
         } else {
           patchTask(id, before)
-          toast('Could not move that task. It is back where it was.')
+          toast(`Could not move that task${why(e)}. It is back where it was.`)
         }
       }
     },
@@ -211,9 +214,9 @@ export function useTasks() {
       try {
         await taskSource.setDeadline(id, due)
         return true
-      } catch {
+      } catch (e) {
         patchTask(id, { due: before })
-        toast('Could not change the deadline. It is back as it was.')
+        toast(`Could not change the deadline${why(e)}. It is back as it was.`)
         return false
       }
     },

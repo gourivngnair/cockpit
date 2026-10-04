@@ -94,8 +94,23 @@ async function fetchAll<T>(path: 'projects' | 'tasks'): Promise<T[]> {
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const res: { data: T | null; error: Error | null } = await supabase.functions.invoke('todoist', { body })
   if (res.error) {
-    console.error('Todoist call failed', body.action ?? body.path, res.error)
-    throw res.error
+    // Supabase hides the function's reply inside error.context; read it so the user sees the real reason.
+    let detail = ''
+    const ctx = (res.error as { context?: Response }).context
+    if (ctx && typeof ctx.clone === 'function') {
+      try {
+        const j = (await ctx.clone().json()) as { error?: unknown; message?: unknown }
+        detail = String(j.error ?? j.message ?? '')
+      } catch {
+        try {
+          detail = await ctx.clone().text()
+        } catch {
+          /* no body */
+        }
+      }
+    }
+    console.error('Todoist call failed', body.action ?? body.path, detail || res.error.message)
+    throw new Error((detail || res.error.message).slice(0, 160))
   }
   return res.data as T
 }
