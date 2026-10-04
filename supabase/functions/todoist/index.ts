@@ -7,6 +7,7 @@
 //   { action: 'close', id }                            -> POST /tasks/{id}/close
 // There is deliberately no way to send a due date, so Cockpit can never change one (invariant 1).
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { normalizeReply } from './body.ts'
 
 const BASE = 'https://api.todoist.com/api/v1'
 const READABLE = new Set(['projects', 'tasks', 'labels'])
@@ -20,13 +21,10 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 
 async function passThrough(res: Response) {
-  const text = await res.text()
-  // Todoist answers some writes (like close) with an empty body. Always return valid JSON,
-  // or the browser client treats the empty reply as an error.
-  if (!text.trim()) return json({ ok: res.ok }, res.ok ? 200 : res.status)
-  return new Response(text, {
-    status: res.status,
-    headers: { ...cors, 'Content-Type': res.headers.get('Content-Type') ?? 'application/json' },
+  const reply = normalizeReply(await res.text(), res.ok, res.status)
+  return new Response(reply.text, {
+    status: reply.status,
+    headers: { ...cors, 'Content-Type': 'application/json' },
   })
 }
 
