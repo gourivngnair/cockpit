@@ -132,6 +132,9 @@ export const todoistSource: TaskSource = {
   async completeTask(id) {
     await call({ action: 'close', id })
   },
+  async reopenTask(id) {
+    await call({ action: 'reopen', id })
+  },
   async moveTask(id, projectId) {
     await call({ action: 'move', id, projectId })
   },

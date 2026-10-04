@@ -7,6 +7,8 @@ const icon = {
   sun: <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />,
   refresh: <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" />,
   out: <path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9" />,
+  undo: <path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" />,
+  redo: <path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" />,
   bell: <path d="M6 9a6 6 0 1 1 12 0c0 6 2 7 2 7H4s2-1 2-7zM10 20a2 2 0 0 0 4 0" />,
 }
 
@@ -18,14 +20,15 @@ export function Icon({ name, size = 15 }: { name: keyof typeof icon; size?: numb
   )
 }
 
-export function RoundButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+export function RoundButton({ label, onClick, children, disabled = false }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }) {
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-full border border-line bg-panel text-ink2"
+      disabled={disabled}
+      className="grid size-8 place-items-center rounded-full border border-line bg-panel text-ink2 disabled:opacity-35"
     >
       {children}
     </button>
@@ -45,9 +48,10 @@ interface ShellProps {
   onRefresh?: () => void
   onSignOut?: () => void
   onNotifications?: () => void
+  history?: { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null; onUndo: () => void; onRedo: () => void }
 }
 
-export function Shell({ children, onRefresh, onSignOut, onNotifications }: ShellProps) {
+export function Shell({ children, onRefresh, onSignOut, onNotifications, history }: ShellProps) {
   const [theme, setTheme] = useState(currentTheme())
   return (
     <div className="flex h-full flex-col px-3.5 pb-3.5 pt-2.5">
@@ -66,6 +70,16 @@ export function Shell({ children, onRefresh, onSignOut, onNotifications }: Shell
             <RoundButton label="Refresh from Todoist" onClick={onRefresh}>
               <Icon name="refresh" />
             </RoundButton>
+          )}
+          {history && (
+            <>
+              <RoundButton label={history.undoLabel ? `Undo: ${history.undoLabel}` : 'Undo'} onClick={history.onUndo} disabled={!history.canUndo}>
+                <Icon name="undo" />
+              </RoundButton>
+              <RoundButton label={history.redoLabel ? `Redo: ${history.redoLabel}` : 'Redo'} onClick={history.onRedo} disabled={!history.canRedo}>
+                <Icon name="redo" />
+              </RoundButton>
+            </>
           )}
           {onNotifications && (
             <RoundButton label="Notifications" onClick={onNotifications}>

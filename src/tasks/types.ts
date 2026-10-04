@@ -53,6 +53,8 @@ export interface TaskSource {
   createTask(input: NewTask): Promise<Task>
   /** Completes a task (for a repeating task, today's occurrence). */
   completeTask(id: string): Promise<void>
+  /** Reopens a completed task (undo). Not for repeating tasks. */
+  reopenTask(id: string): Promise<void>
   /** Moves a task to another goal (project). */
   moveTask(id: string, projectId: string): Promise<void>
   /** Replaces a task's labels (used for the subgoal). */

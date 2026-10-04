@@ -73,6 +73,10 @@ export interface Backend {
   tasks: FakeTask[]
   blocks: FakeBlock[]
   done: FakeDone[]
+  /** Non-repeating tasks completed through Cockpit, so they can be reopened. */
+  closed: FakeTask[]
+  /** Deletes on the done table (undoing a completion forgets it). */
+  doneDeletes: number
   /** How many times the app asked the server to copy Todoist completions. */
   syncDoneCalls: number
   /** Bodies sent to the notify function (the test button). */
@@ -104,6 +108,8 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     tasks: [...(opts.tasks ?? [])],
     blocks: [...(opts.blocks ?? [])],
     done: [...(opts.done ?? [])],
+    closed: [],
+    doneDeletes: 0,
     syncDoneCalls: 0,
     notifyCalls: [],
     pushWrites: [],
@@ -174,9 +180,18 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
             const [d, time] = t.due.date.split('T')
             t.due = { ...t.due, date: addDays(d, 1) + (time ? `T${time}` : '') }
           } else {
+            if (t) backend.closed.push(t)
             backend.tasks = backend.tasks.filter((x) => x.id !== body.id)
           }
           return json(route, { ok: true })
+        case 'reopen': {
+          const back = backend.closed.find((x) => x.id === body.id)
+          if (back) {
+            backend.closed = backend.closed.filter((x) => x.id !== body.id)
+            backend.tasks.push(back)
+          }
+          return json(route, { ok: true })
+        }
         case 'move':
           if (t) t.project_id = body.projectId!
           return json(route, { ok: true })
@@ -217,6 +232,10 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
   await page.route('**/rest/v1/done**', async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    if (req.method() === 'DELETE') {
+      backend.doneDeletes++
+      return route.fulfill({ status: 204, headers: CORS, body: '' })
+    }
     const m = /task_id=in\.\(([^)]*)\)/.exec(decodeURIComponent(req.url()).replace(/\+/g, ' '))
     const ids = m ? m[1].split(',').map((s) => s.replace(/"/g, '')) : null
     return json(route, ids ? backend.done.filter((d) => ids.includes(d.task_id)) : backend.done)

@@ -108,6 +108,11 @@ Supersedes "the Todoist due date and time is the deadline" (Constraints, Phase 1
 - Focus mode (Phase 2) uses a 5-4-3-2-1 beep at the end of a focus round and at the end of a break instead of soundscapes. Focus sessions will be logged for the Progress page.
 - Email: tasks, assignments and exams are found on demand in a Claude chat (Gmail connector), proposed for approval, and added to Todoist. Nothing is built into Cockpit for this.
 
+## Decisions (2026-10-04, undo)
+- Undo and redo (Ctrl+Z / Cmd+Z, Ctrl+Shift+Z or Ctrl+Y, plus buttons in the top bar for the tablet). History lasts for the session (last 30 actions).
+- Undoable: planning, moving, resizing and removing blocks (and the Todoist planned time that follows them); moving a task between goals and subgoals; deadline changes; completing a non-repeating task (reopened in Todoist, and its saved completion forgotten).
+- Not undoable: ticking a repeating task (reopening could disturb its schedule) and adding a task (Cockpit may not delete Todoist tasks). Ctrl+Z inside a text field keeps its normal meaning of undoing typing.
+
 ## Future direction (not in current scope)
 Gouri expects to stop using Todoist at some point and create tasks and deadlines by telling Claude in a chat. To keep that possible, the app reads tasks only through a single task-source layer (`src/tasks/`), never from Todoist directly. Replacing Todoist later means swapping that layer for Cockpit's own tasks table, plus a way for Claude chat to create tasks. Do not build this until asked.
 

@@ -23,7 +23,7 @@ All task reads and writes go through one task-source layer in `src/tasks/` (Todo
 ## Data ownership
 | Data | Lives in |
 |---|---|
-| Tasks, projects, labels, repeat rules, deadlines | Todoist. Cockpit may: add tasks (with goal, subgoal label, time needed, optional deadline); complete tasks; move tasks between goals and subgoals (project and label); set or clear a task's Deadline; set or clear a non-repeating task's planned time (its due date and time, plus length) from its earliest upcoming block. Nothing else. (Decided 2026-10-04.) |
+| Tasks, projects, labels, repeat rules, deadlines | Todoist. Cockpit may: add tasks (with goal, subgoal label, time needed, optional deadline); complete tasks, and reopen a completed non-repeating task (undo only); move tasks between goals and subgoals (project and label); set or clear a task's Deadline; set or clear a non-repeating task's planned time (its due date and time, plus length) from its earliest upcoming block. Nothing else. (Decided 2026-10-04.) |
 
 **Deadline vs planned time.** A task's real deadline is Todoist's *Deadline* field (a date, no time). Its *due* date and time is the planned work time, mirrored from Cockpit's earliest upcoming block that has not finished. No block left means the due date is cleared. A repeating task's due date is its schedule and is never written.
 | Work blocks (task id, date, start, minutes) | Supabase `blocks` |

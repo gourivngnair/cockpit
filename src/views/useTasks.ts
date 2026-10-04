@@ -21,6 +21,12 @@ export interface MoveTarget {
   subgoal?: string | null
 }
 
+/** Where a task lives: its goal (project) and labels (the subgoal is one of them). */
+export interface Placement {
+  projectId: string
+  labels: string[]
+}
+
 const KEY = 'cockpit-last-known'
 
 function readCache(): Pick<State, 'projects' | 'tasks'> | null {
@@ -100,15 +106,16 @@ export function useTasks() {
     void load()
   }, [load])
 
+  /** Completes a task. Resolves to the task when a non-repeating task was completed (so it can be undone), otherwise null. */
   const complete = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<Task | null> => {
       const list = tasksRef.current
       const index = list.findIndex((t) => t.id === id)
-      if (index < 0 || inFlight.current.has(id)) return
+      if (index < 0 || inFlight.current.has(id)) return null
       const task = list[index]
       if (!canTick(task, todayStr()) || ticked.has(id)) {
         toast(`Already done for today. Next one is ${task.due ? nextLabel(task.due.date) : 'later'}.`)
-        return
+        return null
       }
       inFlight.current.add(id)
       if (task.recurring) setTicked((s) => new Set(s).add(id))
@@ -119,6 +126,7 @@ export function useTasks() {
       try {
         await taskSource.completeTask(id)
         if (task.recurring) void load() // pick up the next occurrence
+        return task.recurring ? null : task
       } catch (e) {
         if (task.recurring) {
           setTicked((s) => {
@@ -135,6 +143,7 @@ export function useTasks() {
           })
         }
         toast(`Could not complete that task${why(e)}. It is back on the list.`)
+        return null
       } finally {
         inFlight.current.delete(id)
       }
@@ -171,31 +180,28 @@ export function useTasks() {
     [toast],
   )
 
-  const move = useCallback(
-    async (id: string, target: MoveTarget) => {
+  /**
+   * Puts a task in a goal (project) with a set of labels: optimistic, then confirmed with Todoist,
+   * rolled back on failure. Used by move, drag and undo. Resolves to true when it succeeded.
+   */
+  const place = useCallback(
+    async (id: string, to: Placement): Promise<boolean> => {
       const task = tasksRef.current.find((t) => t.id === id)
-      if (!task || id.startsWith('tmp-')) return
-      const projects = projectsRef.current
-      const sameGoal = rootOf(projects, task.projectId) === target.goalId
-      // Dropping on a goal heading inside the same goal changes nothing.
-      if (sameGoal && target.subgoal === undefined) return
-
-      const projectId = sameGoal ? task.projectId : target.goalId
-      const subgoal = target.subgoal === undefined ? null : target.subgoal // a different goal starts with no subgoal
-      const labels = labelsWithSubgoal(task.labels, subgoal)
-      const projectChanged = projectId !== task.projectId
-      const labelsChanged = !sameList(labels, task.labels)
-      if (!projectChanged && !labelsChanged) return
+      if (!task || id.startsWith('tmp-')) return false
+      const projectChanged = to.projectId !== task.projectId
+      const labelsChanged = !sameList(to.labels, task.labels)
+      if (!projectChanged && !labelsChanged) return false
 
       const before = { projectId: task.projectId, labels: task.labels }
-      patchTask(id, { projectId, labels })
+      patchTask(id, to)
       let moved = false
       try {
         if (projectChanged) {
-          await taskSource.moveTask(id, projectId)
+          await taskSource.moveTask(id, to.projectId)
           moved = true
         }
-        if (labelsChanged) await taskSource.setLabels(id, labels)
+        if (labelsChanged) await taskSource.setLabels(id, to.labels)
+        return true
       } catch (e) {
         if (moved) {
           toast(`Moved, but could not change the subgoal${why(e)}. Showing what Todoist has.`)
@@ -204,11 +210,48 @@ export function useTasks() {
           patchTask(id, before)
           toast(`Could not move that task${why(e)}. It is back where it was.`)
         }
+        return false
       }
     },
     [load, patchTask, toast],
   )
 
+  /** Moves a task to a goal or subgoal. Resolves to what changed (so it can be undone), or null. */
+  const move = useCallback(
+    async (id: string, target: MoveTarget): Promise<{ id: string; before: Placement; after: Placement } | null> => {
+      const task = tasksRef.current.find((t) => t.id === id)
+      if (!task || id.startsWith('tmp-')) return null
+      const projects = projectsRef.current
+      const sameGoal = rootOf(projects, task.projectId) === target.goalId
+      // Dropping on a goal heading inside the same goal changes nothing.
+      if (sameGoal && target.subgoal === undefined) return null
+
+      const subgoal = target.subgoal === undefined ? null : target.subgoal // a different goal starts with no subgoal
+      const after: Placement = { projectId: sameGoal ? task.projectId : target.goalId, labels: labelsWithSubgoal(task.labels, subgoal) }
+      const before: Placement = { projectId: task.projectId, labels: task.labels }
+      return (await place(id, after)) ? { id, before, after } : null
+    },
+    [place],
+  )
+
+  /** Brings back a task that was completed (undo). Never for repeating tasks. */
+  const reopen = useCallback(
+    async (task: Task): Promise<boolean> => {
+      if (task.recurring) return false
+      setCompleted((c) => c.filter((t) => t.id !== task.id))
+      setState((s) => (s.tasks.some((t) => t.id === task.id) ? s : { ...s, tasks: [...s.tasks, task] }))
+      try {
+        await taskSource.reopenTask(task.id)
+        return true
+      } catch (e) {
+        setState((s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== task.id) }))
+        setCompleted((c) => [...c, task])
+        toast(`Could not bring that task back${why(e)}.`)
+        return false
+      }
+    },
+    [toast],
+  )
   /** Sets or clears a task's real deadline (Todoist's Deadline field, date only). */
   const setDeadline = useCallback(
     async (id: string, date: string | null) => {
@@ -256,5 +299,5 @@ export function useTasks() {
     [patchTask, toast],
   )
 
-  return { ...state, ticked, completed, reload: load, complete, add, move, setDeadline, setPlan }
+  return { ...state, ticked, completed, reload: load, complete, add, move, place, reopen, setDeadline, setPlan }
 }

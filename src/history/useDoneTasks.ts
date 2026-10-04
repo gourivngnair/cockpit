@@ -45,3 +45,8 @@ export async function syncDone(): Promise<boolean> {
   const { error } = await supabase.functions.invoke('sync-done')
   return !error
 }
+
+/** Removes a task's saved completion (used when a completion is undone), so it does not count in progress. */
+export async function forgetCompletion(taskId: string): Promise<void> {
+  await supabase.from('done').delete().eq('task_id', taskId).eq('recurring', false)
+}

@@ -56,8 +56,8 @@ export function useBlocks() {
   }, [refetch])
 
   const create = useCallback(
-    async (input: Omit<Block, 'id'>) => {
-      const block: Block = { id: crypto.randomUUID(), ...input }
+    async (input: Omit<Block, 'id'> & { id?: string }) => {
+      const block: Block = { ...input, id: input.id ?? crypto.randomUUID() }
       setBlocks((b) => [...b, block])
       const { error } = await supabase.from('blocks').insert({ id: block.id, ...toDb(block) })
       if (error) {

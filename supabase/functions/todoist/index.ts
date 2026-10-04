@@ -5,6 +5,7 @@
 //   { path: 'projects' | 'tasks' | 'labels', params }          GET (read)
 //   { action: 'create', content, projectId?, labels?, durationMin?, deadline? }
 //   { action: 'close', id }
+//   { action: 'reopen', id }                                   undo a completion (non-repeating tasks only)
 //   { action: 'move', id, projectId }                          change goal (project)
 //   { action: 'setLabels', id, labels }                        change subgoal (label)
 //   { action: 'setDeadline', id, date: 'YYYY-MM-DD' | null }   the Deadline field; refused for repeating tasks
@@ -82,6 +83,9 @@ Deno.serve(async (req) => {
     if (!id || !ID.test(id)) return json({ error: 'Bad task id.' }, 400)
 
     if (body.action === 'close') return passThrough(await post(`tasks/${id}/close`))
+
+    // Undo of a completion. Cockpit only offers it for non-repeating tasks.
+    if (body.action === 'reopen') return passThrough(await post(`tasks/${id}/reopen`))
 
     if (body.action === 'move') {
       if (typeof body.projectId !== 'string' || !ID.test(body.projectId)) return json({ error: 'Bad project.' }, 400)
