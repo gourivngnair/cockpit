@@ -16,6 +16,7 @@ export interface FakeEvent {
   start_time: string
   end_time: string
   room: string
+  kind: 'class' | 'event'
 }
 
 export interface FakeTask {

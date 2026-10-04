@@ -9,9 +9,16 @@ export const START = 7 // 7 am
 export const END = 24 // midnight
 const HOUR_PX = 64
 const MIN_VISIBLE = 22 // minutes; keeps very short items readable
+const EVENT_HUE = '#1C8BD6'
+// One-off events (talks, orations) are tinted blue so they read differently from grey classes.
+const EVENT_STYLE = {
+  color: EVENT_HUE,
+  background: `color-mix(in srgb, ${EVENT_HUE} 15%, var(--panel))`,
+  borderColor: `color-mix(in srgb, ${EVENT_HUE} 40%, var(--panel))`,
+}
 
 interface Item {
-  kind: 'ev' | 'rt'
+  kind: 'class' | 'event' | 'rt'
   key: string
   title: string
   detail: string
@@ -26,7 +33,7 @@ function itemsFor(day: string, events: EventRow[], tasks: Task[]): Item[] {
     const s = toMin(e.start)
     const end = toMin(e.end)
     out.push({
-      kind: 'ev',
+      kind: e.kind,
       key: `ev-${e.id}`,
       title: e.title,
       detail: `${shortTime(e.start)} to ${shortTime(e.end)}${e.room ? `, ${e.room}` : ''}`,
@@ -79,8 +86,8 @@ function Lane({ day, compact, events, tasks, now }: { day: string; compact: bool
           <div
             key={b.key}
             data-kind={b.kind}
-            className={`absolute overflow-hidden rounded-block border-[1.5px] border-dashed border-grey-line bg-grey-fill leading-tight text-grey-ink ${compact ? 'px-[7px] py-[5px]' : 'px-2.5 py-[7px]'}`}
-            style={{ top: top(b.s) + 2, height: ((b.e - b.s) / 60) * HOUR_PX - 4, left: `calc(${b.lane * w}% + 4px)`, width: `calc(${w}% - 8px)` }}
+            className={`absolute overflow-hidden rounded-block border-[1.5px] leading-tight ${b.kind === 'event' ? 'border-solid' : 'border-dashed border-grey-line bg-grey-fill text-grey-ink'} ${compact ? 'px-[7px] py-[5px]' : 'px-2.5 py-[7px]'}`}
+            style={{ ...(b.kind === 'event' ? EVENT_STYLE : null), top: top(b.s) + 2, height: ((b.e - b.s) / 60) * HOUR_PX - 4, left: `calc(${b.lane * w}% + 4px)`, width: `calc(${w}% - 8px)` }}
           >
             <b className={`block overflow-hidden text-ellipsis font-semibold ${compact ? 'whitespace-nowrap text-xs' : 'text-[13px]'}`}>{b.title}</b>
             {!short && !(compact && b.e - b.s < 60) && <small className="mt-[3px] block text-[11.5px] opacity-85">{b.detail}</small>}
@@ -173,7 +180,7 @@ export function Calendar({ events, tasks, onClasses }: { events: EventRow[]; tas
         </div>
         <div className="flex justify-self-end gap-1.5">
           <button type="button" onClick={onClasses} className="h-[30px] rounded-lg border border-line bg-panel px-2.5 text-[13px] font-medium">
-            Classes
+            Schedule
           </button>
           {!onToday && (
             <button type="button" onClick={() => setDay(today)} className="h-[30px] rounded-lg border border-line bg-panel px-2.5 text-[13px] font-medium">

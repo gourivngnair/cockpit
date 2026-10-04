@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../ui/toastContext'
 import { weeksOf, type NewEvent } from './parse'
@@ -10,6 +10,7 @@ export interface EventRow {
   start: string // HH:MM
   end: string // HH:MM
   room: string
+  kind: 'class' | 'event'
 }
 
 interface DbRow {
@@ -19,6 +20,7 @@ interface DbRow {
   start_time: string
   end_time: string
   room: string
+  kind: 'class' | 'event'
 }
 
 const fromDb = (r: DbRow): EventRow => ({
@@ -28,6 +30,7 @@ const fromDb = (r: DbRow): EventRow => ({
   start: r.start_time.slice(0, 5),
   end: r.end_time.slice(0, 5),
   room: r.room,
+  kind: r.kind,
 })
 
 export function useEvents() {
@@ -39,7 +42,7 @@ export function useEvents() {
   }, [events])
 
   const refetch = useCallback(async () => {
-    const { data, error } = await supabase.from('events').select('id,title,date,start_time,end_time,room')
+    const { data, error } = await supabase.from('events').select('id,title,date,start_time,end_time,room,kind')
     if (error) return toast('Could not load classes.')
     setEvents((data as DbRow[]).map(fromDb))
   }, [toast])
@@ -67,13 +70,14 @@ export function useEvents() {
         start: e.start,
         end: e.end,
         room: e.room,
+        kind: e.kind,
       }))
       setEvents([...before.filter((e) => !inWeeks(e.date)), ...optimistic])
       try {
         // Insert first, then remove the old rows by id, so a failure never loses classes.
         const oldIds = before.filter((e) => inWeeks(e.date)).map((e) => e.id)
         const { error } = await supabase.from('events').insert(
-          incoming.map((e) => ({ title: e.title, date: e.date, start_time: e.start, end_time: e.end, room: e.room })),
+          incoming.map((e) => ({ title: e.title, date: e.date, start_time: e.start, end_time: e.end, room: e.room, kind: e.kind })),
         )
         if (error) throw error
         if (oldIds.length) {

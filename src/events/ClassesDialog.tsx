@@ -38,12 +38,12 @@ export function ClassesDialog({ events, onReplace, onRemove, onClose }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Classes"
+        aria-label="Schedule"
         onClick={(e) => e.stopPropagation()}
         className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-panel border border-line bg-panel shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="m-0 text-base font-semibold">Classes</h2>
+          <h2 className="m-0 text-base font-semibold">Schedule</h2>
           <button type="button" onClick={onClose} className="rounded-lg px-2.5 py-1 text-ink2 hover:bg-soft">
             Close
           </button>
@@ -51,7 +51,7 @@ export function ClassesDialog({ events, onReplace, onRemove, onClose }: Props) {
         <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
           <h3 className="m-0 mb-1 text-[13px] font-semibold text-ink2">Import a week</h3>
           <p className="m-0 mb-2 text-[13px] text-muted">
-            Send Claude a screenshot of your schedule, then paste what it gives you here. Importing replaces any classes already saved in those weeks.
+            Send Claude a screenshot of your schedule, then paste what it gives you here. Importing replaces any classes and events already saved in those weeks.
           </p>
           <textarea
             aria-label="Schedule from Claude"
@@ -70,8 +70,8 @@ export function ClassesDialog({ events, onReplace, onRemove, onClose }: Props) {
           )}
           {canImport && (
             <p className="m-0 mt-2 text-[13px] text-ink2">
-              {parsed.events.length} {parsed.events.length === 1 ? 'class' : 'classes'} ready
-              {replacing > 0 ? `, replacing ${replacing} saved ${replacing === 1 ? 'class' : 'classes'}` : ''}.
+              {parsed.events.length} {parsed.events.length === 1 ? 'item' : 'items'} ready
+              {replacing > 0 ? `, replacing ${replacing} saved ${replacing === 1 ? 'item' : 'items'}` : ''}.
             </p>
           )}
           <button
@@ -83,9 +83,9 @@ export function ClassesDialog({ events, onReplace, onRemove, onClose }: Props) {
             {busy ? 'Saving' : 'Import'}
           </button>
 
-          <h3 className="m-0 mb-1 mt-6 text-[13px] font-semibold text-ink2">Saved classes</h3>
+          <h3 className="m-0 mb-1 mt-6 text-[13px] font-semibold text-ink2">Saved classes and events</h3>
           {sorted.length === 0 ? (
-            <p className="m-0 text-[13px] text-muted">No classes yet.</p>
+            <p className="m-0 text-[13px] text-muted">Nothing saved yet.</p>
           ) : (
             <ul className="m-0 list-none p-0">
               {sorted.map((e) => (
@@ -95,6 +95,7 @@ export function ClassesDialog({ events, onReplace, onRemove, onClose }: Props) {
                   </span>
                   <span className="flex-1">
                     <b className="font-semibold">{e.title}</b>
+                    {e.kind === 'event' && <span className="ml-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium" style={{ color: '#1C8BD6', background: 'color-mix(in srgb, #1C8BD6 15%, var(--panel))' }}>Event</span>}
                     <span className="text-muted">
                       {' '}
                       {shortTime(e.start)} to {shortTime(e.end)}

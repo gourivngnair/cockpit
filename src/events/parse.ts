@@ -6,6 +6,7 @@ export interface NewEvent {
   start: string // HH:MM
   end: string // HH:MM
   room: string
+  kind: 'class' | 'event'
 }
 
 export interface ParseResult {
@@ -16,7 +17,7 @@ export interface ParseResult {
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
-/** Parses the pasted weekly schedule: a JSON array of {title,date,start,end,room?}. */
+/** Parses the pasted weekly schedule: a JSON array of {title,date,start,end,room?,kind?}. kind is "class" (default) or "event". */
 export function parseSchedule(text: string): ParseResult {
   let raw: unknown
   try {
@@ -36,11 +37,13 @@ export function parseSchedule(text: string): ParseResult {
     const start = typeof o.start === 'string' ? o.start : ''
     const end = typeof o.end === 'string' ? o.end : ''
     const room = typeof o.room === 'string' ? o.room.trim() : ''
-    if (!title) return void errors.push(`Class ${n}: missing title.`)
-    if (!DATE.test(date) || Number.isNaN(Date.parse(date))) return void errors.push(`Class ${n} (${title}): bad date "${date}".`)
-    if (!TIME.test(start) || !TIME.test(end)) return void errors.push(`Class ${n} (${title}): times must look like 09:30.`)
-    if (toMin(end) <= toMin(start)) return void errors.push(`Class ${n} (${title}): ends before it starts.`)
-    events.push({ title, date, start, end, room })
+    const kind = o.kind === undefined || o.kind === 'class' ? 'class' : o.kind === 'event' ? 'event' : null
+    if (!title) return void errors.push(`Item ${n}: missing title.`)
+    if (!kind) return void errors.push(`Item ${n} (${title}): kind must be "class" or "event".`)
+    if (!DATE.test(date) || Number.isNaN(Date.parse(date))) return void errors.push(`Item ${n} (${title}): bad date "${date}".`)
+    if (!TIME.test(start) || !TIME.test(end)) return void errors.push(`Item ${n} (${title}): times must look like 09:30.`)
+    if (toMin(end) <= toMin(start)) return void errors.push(`Item ${n} (${title}): ends before it starts.`)
+    events.push({ title, date, start, end, room, kind })
   })
   return { events, errors }
 }

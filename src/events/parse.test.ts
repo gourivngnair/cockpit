@@ -29,9 +29,20 @@ describe('parseSchedule', () => {
   })
 })
 
+describe('parseSchedule kind', () => {
+  const row = { title: 'Talk', date: '2026-10-09', start: '16:45', end: '18:15' }
+  it('defaults to class and accepts event', () => {
+    expect(parseSchedule(JSON.stringify([row])).events[0].kind).toBe('class')
+    expect(parseSchedule(JSON.stringify([{ ...row, kind: 'event' }])).events[0].kind).toBe('event')
+  })
+  it('rejects unknown kinds', () => {
+    expect(parseSchedule(JSON.stringify([{ ...row, kind: 'meeting' }])).errors[0]).toMatch(/kind must be/)
+  })
+})
+
 describe('weeksOf', () => {
   it('groups events by Monday to Sunday week', () => {
-    const mk = (date: string) => ({ title: 't', date, start: '09:00', end: '10:00', room: '' })
+    const mk = (date: string) => ({ title: 't', date, start: '09:00', end: '10:00', room: '', kind: 'class' as const })
     expect(weeksOf([mk('2026-10-05'), mk('2026-10-11'), mk('2026-10-12')])).toEqual([
       ['2026-10-05', '2026-10-11'],
       ['2026-10-12', '2026-10-18'],
