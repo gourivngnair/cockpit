@@ -257,7 +257,7 @@ export function Calendar({ events, tasks, completed, blocks, projects, onClasses
   const cardTask = cardBlock ? tasks.find((t) => t.id === cardBlock.taskId) : undefined
 
   return (
-    <Panel>
+    <Panel className="min-h-0 flex-1">
       <div className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-line px-3.5 py-3">
         <div className="flex items-center gap-2 text-[15px] font-semibold">
           {week ? (

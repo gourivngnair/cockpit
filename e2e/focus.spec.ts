@@ -279,6 +279,7 @@ test.describe('across devices', () => {
     await screen(page).getByRole('button', { name: 'Start focus' }).click()
     await expect(screen(page)).toHaveAttribute('data-focus-running', 'true')
     await page.clock.runFor(500) // lets the delayed save go out
+    await expect.poll(() => be.focusWrites.length).toBeGreaterThan(0)
     const mine = (be.focusWrites.at(-1) as { state: ReturnType<typeof initialState> }).state
 
     // The tablet ends the session (a higher seq).

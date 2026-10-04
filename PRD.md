@@ -124,6 +124,15 @@ Supersedes "the Todoist due date and time is the deadline" (Constraints, Phase 1
 - Screen stays awake while counting (where the browser allows); the countdown shows in the tab title and in a pill when minimised. Space starts or pauses, Escape minimises.
 - Background is a soft gradient until the vision board (Phase 3) provides images.
 
+## Decisions (2026-10-04, Phase 3: Vision board)
+- A **Vision** tab beside Plan (address `#/vision`, so the back button works). Upload by picking files, dragging them in, or pasting from the clipboard. Up to 20 images per upload, 15 MB each.
+- Images are shrunk in the browser: a main copy of at most 1600 px and a grid copy of at most 480 px (JPEG). If any step of an upload fails, nothing is left behind (files removed, no row saved). The files are private and shown through short-lived signed links, renewed before they expire.
+- Each image has a caption and a free-text theme (suggestions come from themes already used; blank means "Unsorted", which has no chip). Masonry grid, newest first, with theme filter chips, and a full-size view with arrows, caption and theme editing, "Show this one today" (a pin that lasts for that day) and Remove.
+- Removing asks first and cannot be undone (the files are deleted), so it is not part of Ctrl+Z.
+- "Pinterest board" button links to https://pin.it/3M7bCmDl1.
+- Today's vision: an image pinned for today wins; otherwise the images take turns, one a day, in the order they were added (same on every device). A shuffle button moves on to the next image for this session only. Shown in the right-hand panel at 1320 px wide and above (Day view), and as a slim strip above the calendar on narrower screens such as the tablet (Day view only).
+- The same image is the blurred background of Focus mode, with a "Next image" button. Today's image is kept on the device so it still shows with no connection, and the board's list is kept too.
+
 ## Future direction (not in current scope)
 Gouri expects to stop using Todoist at some point and create tasks and deadlines by telling Claude in a chat. To keep that possible, the app reads tasks only through a single task-source layer (`src/tasks/`), never from Todoist directly. Replacing Todoist later means swapping that layer for Cockpit's own tasks table, plus a way for Claude chat to create tasks. Do not build this until asked.
 

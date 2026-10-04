@@ -16,11 +16,14 @@ interface Props {
   /** Tasks planned for today, to choose from before starting. */
   plannedToday: Task[]
   onDone: (taskId: string) => void
+  /** Today's vision image, shown blurred behind the timer. */
+  imageSrc: string | null
+  onNextImage?: () => void
 }
 
 const ghostBtn = 'rounded-full border border-white/30 bg-white/10 px-5 py-2.5 font-semibold text-white backdrop-blur-md disabled:opacity-40'
 
-export function FocusScreen({ focus, task, taskName, taskHue, plannedToday, onDone }: Props) {
+export function FocusScreen({ focus, task, taskName, taskHue, plannedToday, onDone, imageSrc, onNextImage }: Props) {
   const { state, left, dispatch, open, setOpen, mine, armed, volume, setVolume, counting } = focus
   const [editingPlaylist, setEditingPlaylist] = useState(false)
   const [playlistText, setPlaylistText] = useState(state.playlist)
@@ -68,9 +71,23 @@ export function FocusScreen({ focus, task, taskName, taskHue, plannedToday, onDo
   return (
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Focus mode" className="fixed inset-0 z-70 outline-none" data-focus-phase={state.phase} data-focus-running={state.running} data-focus-paused={state.paused}>
       <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg,#2b2b33,#15151a)' }} />
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg,rgba(10,10,12,.35),rgba(10,10,12,.6))' }} />
+      {imageSrc && (
+        <div
+          data-focus-image
+          className="absolute -inset-10 scale-105 bg-cover bg-center"
+          style={{ backgroundImage: `url('${imageSrc}')`, filter: 'blur(28px) saturate(1.1)' }}
+        />
+      )}
+      <div className="absolute inset-0" style={{ background: imageSrc ? 'linear-gradient(180deg,rgba(10,10,12,.55),rgba(10,10,12,.72))' : 'linear-gradient(180deg,rgba(10,10,12,.35),rgba(10,10,12,.6))' }} />
       <div className="relative flex h-full flex-col items-center justify-center p-6 text-center text-white">
         <div className="absolute right-5 top-[calc(18px+env(safe-area-inset-top,0px))] flex gap-2">
+          {onNextImage && (
+            <button type="button" aria-label="Next image" title="Next image" onClick={onNextImage} className="grid size-9 place-items-center rounded-full border border-white/25 bg-white/10 backdrop-blur-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 7h3.5c4 0 5 10 9 10H20M4 17h3.5c1.6 0 2.7-1.6 3.6-3.4M20 7h-3.5c-1.6 0-2.7 1.6-3.6 3.4M17.5 4.5 20 7l-2.5 2.5M17.5 14.5 20 17l-2.5 2.5" />
+              </svg>
+            </button>
+          )}
           <button type="button" aria-label="Minimise" title="Minimise" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-full border border-white/25 bg-white/10 backdrop-blur-md">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <path d="M6 12h12" />

@@ -66,6 +66,17 @@ export interface FakeSession {
   minutes: number
 }
 
+export interface FakeVision {
+  id: string
+  storage_path: string
+  caption: string
+  theme: string
+  created_at: string
+  width: number
+  height: number
+  pinned_on: string | null
+}
+
 export interface BlockWrite {
   method: string
   /** The JSON body Cockpit sent (insert row or update fields). */
@@ -78,6 +89,18 @@ export interface Backend {
   tasks: FakeTask[]
   blocks: FakeBlock[]
   done: FakeDone[]
+  /** The vision board rows, and everything the app did to storage and to the table. */
+  vision: FakeVision[]
+  uploads: Array<{ path: string; body: Buffer }>
+  removedPaths: string[]
+  visionWrites: Array<{ method: string; body: Record<string, unknown> | null; query: string }>
+  signCalls: string[][]
+  /** Switches to make things fail. */
+  failVisionWrites: boolean
+  failVisionReads: boolean
+  failSign: boolean
+  /** Fail an upload whose path contains this text (for example "-thumb"). */
+  failUploadMatch: string | null
   /** Saved focus sessions (the log), and every write the app made to it. */
   sessions: FakeSession[]
   sessionWrites: Array<Record<string, unknown>>
@@ -112,6 +135,7 @@ interface Opts {
   projects?: FakeProject[]
   blocks?: FakeBlock[]
   done?: FakeDone[]
+  vision?: FakeVision[]
   sessions?: FakeSession[]
   focusState?: unknown
 }
@@ -123,6 +147,15 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     tasks: [...(opts.tasks ?? [])],
     blocks: [...(opts.blocks ?? [])],
     done: [...(opts.done ?? [])],
+    vision: [...(opts.vision ?? [])],
+    uploads: [],
+    removedPaths: [],
+    visionWrites: [],
+    signCalls: [],
+    failVisionWrites: false,
+    failVisionReads: false,
+    failSign: false,
+    failUploadMatch: null,
     sessions: [...(opts.sessions ?? [])],
     sessionWrites: [],
     focusRow: opts.focusState ? { state: opts.focusState } : null,
@@ -267,6 +300,60 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     if (req.method() === 'GET') return json(route, [])
     backend.pushWrites.push({ method: req.method(), body: req.method() === 'DELETE' ? null : (req.postDataJSON() as Record<string, unknown>) })
     return route.fulfill({ status: req.method() === 'POST' ? 201 : 204, headers: CORS, body: '' })
+  })
+
+  // The vision board: rows, private image files and the secure links to them.
+  const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+
+  await page.route(/\/rest\/v1\/vision/, async (route) => {
+    const req = route.request()
+    const method = req.method()
+    if (method === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    if (method === 'GET') return backend.failVisionReads ? json(route, { message: 'offline' }, 500) : json(route, backend.vision)
+    const query = decodeURIComponent(new URL(req.url()).search)
+    const body = method === 'DELETE' ? null : (req.postDataJSON() as Record<string, unknown>)
+    backend.visionWrites.push({ method, body, query })
+    if (backend.failVisionWrites) return json(route, { message: 'boom' }, 500)
+    const id = /[?&]id=eq\.([^&]+)/.exec(query)?.[1]
+    const pinnedOn = /[?&]pinned_on=eq\.([^&]+)/.exec(query)?.[1]
+    if (method === 'POST') {
+      const b = body as unknown as Partial<FakeVision> & { id: string }
+      backend.vision.push({ caption: '', theme: 'Unsorted', width: 0, height: 0, pinned_on: null, created_at: new Date().toISOString(), storage_path: '', ...b })
+    } else if (method === 'PATCH') {
+      for (const row of backend.vision) if ((id && row.id === id) || (pinnedOn && row.pinned_on === pinnedOn)) Object.assign(row, body)
+    } else if (method === 'DELETE' && id) {
+      backend.vision = backend.vision.filter((r) => r.id !== id)
+    }
+    return route.fulfill({ status: method === 'POST' ? 201 : 204, headers: CORS, body: '' })
+  })
+
+  // Uploading a file: POST /storage/v1/object/vision/<path>. Removing files: DELETE /storage/v1/object/vision.
+  await page.route(/\/storage\/v1\/object\/vision(\/|$)/, async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    if (req.method() === 'DELETE') {
+      const { prefixes } = req.postDataJSON() as { prefixes: string[] }
+      backend.removedPaths.push(...prefixes)
+      return json(route, prefixes.map((name) => ({ name })))
+    }
+    const path = decodeURIComponent(new URL(req.url()).pathname.split('/storage/v1/object/vision/')[1])
+    if (backend.failUploadMatch && path.includes(backend.failUploadMatch)) return json(route, { message: 'upload refused', error: 'boom' }, 500)
+    backend.uploads.push({ path, body: req.postDataBuffer() ?? Buffer.alloc(0) })
+    return json(route, { Key: `vision/${path}`, Id: path })
+  })
+
+  // Secure links: POST asks for them, then each link is fetched with GET.
+  await page.route(/\/storage\/v1\/object\/sign\/vision(\/|$)/, async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    if (req.method() === 'POST') {
+      if (backend.failSign) return json(route, { message: 'offline' }, 500)
+      const { paths } = req.postDataJSON() as { paths: string[] }
+      backend.signCalls.push(paths)
+      return json(route, paths.map((path) => ({ error: null, path, signedURL: `/object/sign/vision/${path}?token=t` })))
+    }
+    if (backend.failSign) return route.abort()
+    return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'image/png' }, body: PIXEL })
   })
 
   await page.route(/\/rest\/v1\/focus(\?|$)/, async (route) => {

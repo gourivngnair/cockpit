@@ -22,7 +22,12 @@ import { ToastProvider } from './ui/Toast'
 import { UpdateBanner } from './ui/UpdateBanner'
 import { useToast } from './ui/toastContext'
 import { GoalsPanel } from './views/GoalsPanel'
-import { VisionPlaceholder } from './views/VisionPlaceholder'
+import { TodaysVision, TodaysVisionBanner } from './vision/TodaysVision'
+import { VisionPage } from './vision/VisionPage'
+import { pickToday } from './vision/today'
+import { useImageSrc } from './vision/useImageSrc'
+import { useSignedUrls } from './vision/useSignedUrls'
+import { useVision } from './vision/useVision'
 import { useTasks, type MoveTarget } from './views/useTasks'
 
 const DEFAULT_MINUTES = 30
@@ -56,6 +61,30 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
   const history = useDoneTasks(orphanTaskIds, historyTick)
   const completed = useMemo(() => [...t.completed, ...history.filter((h) => !t.completed.some((c) => c.id === h.id))], [t.completed, history])
 
+  // The two screens, kept in the address (#/vision) so the browser's back button works.
+  const [view, setView] = useState<'plan' | 'vision'>(() => (window.location.hash === '#/vision' ? 'vision' : 'plan'))
+  useEffect(() => {
+    const onPop = () => setView(window.location.hash === '#/vision' ? 'vision' : 'plan')
+    window.addEventListener('popstate', onPop)
+    window.addEventListener('hashchange', onPop)
+    return () => {
+      window.removeEventListener('popstate', onPop)
+      window.removeEventListener('hashchange', onPop)
+    }
+  }, [])
+  const navigate = (next: 'plan' | 'vision') => {
+    if (next === view) return
+    window.history.pushState(null, '', next === 'vision' ? '#/vision' : window.location.pathname + window.location.search)
+    setView(next)
+  }
+
+  // The vision board, and today's image (shown on the Plan screen and behind Focus mode).
+  const vision = useVision()
+  const [shuffle, setShuffle] = useState(0)
+  const todayImage = useMemo(() => pickToday(vision.images, todayStr(), shuffle), [vision.images, shuffle])
+  const heroUrls = useSignedUrls(todayImage ? [todayImage.path] : [])
+  const hero = useImageSrc(todayImage?.id ?? null, todayImage ? heroUrls[todayImage.path] : undefined)
+  const canShuffle = vision.images.length > 1
   // Focus mode: the timer, its saved log, and the focused time shown on each task.
   const focusLog = useFocusLog()
   const focusTotals = useFocusTotals(focusLog.version)
@@ -209,40 +238,55 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
       onSignOut={onSignOut}
       onNotifications={() => setNotificationsOpen(true)}
       onFocus={openFocus}
+      view={view}
+      onView={navigate}
       history={{ canUndo: undo.canUndo, canRedo: undo.canRedo, undoLabel: undo.undoLabel, redoLabel: undo.redoLabel, onUndo: () => void undo.undo(), onRedo: () => void undo.redo() }}
     >
       {/* Week view needs the width, so the vision panel steps aside (as in v2). */}
-      <div
-        className={`grid h-full gap-3 [grid-template-columns:minmax(260px,320px)_minmax(0,1fr)] ${mode === 'week' ? '' : 'min-[1320px]:[grid-template-columns:320px_minmax(0,1fr)_340px]'}`}
-      >
-        <GoalsPanel {...t} complete={(id) => void completeTask(id)} move={(id, target) => void moveTask(id, target)} setDeadline={changeDeadline} blocks={bl.blocks} dragging={dnd} focusTotals={focusTotals} onFocus={startFocus} />
-        <Calendar
-          events={ev.events}
-          tasks={t.tasks}
-          completed={completed}
-          blocks={bl.blocks}
-          projects={t.projects}
-          onClasses={() => setClassesOpen(true)}
-          onLength={(id, m) => void resizeBlock(id, m)}
-          onDone={(taskId) => void completeTask(taskId)}
-          onFocus={startFocus}
-          onRemove={(id) => void removeBlock(id)}
-          mode={mode}
-          onMode={setMode}
-        />
-        {mode === 'day' && (
-          <div className="hidden min-h-0 min-[1320px]:flex min-[1320px]:flex-col">
-            <VisionPlaceholder />
+      {view === 'vision' ? (
+        <VisionPage images={vision.images} uploading={vision.uploading} today={todayStr()} onUpload={vision.upload} onUpdate={vision.update} onRemove={vision.remove} onPin={vision.pin} />
+      ) : (
+        <div
+          className={`grid h-full gap-3 [grid-template-columns:minmax(260px,320px)_minmax(0,1fr)] ${mode === 'week' ? '' : 'min-[1320px]:[grid-template-columns:320px_minmax(0,1fr)_340px]'}`}
+        >
+          <GoalsPanel {...t} complete={(id) => void completeTask(id)} move={(id, target) => void moveTask(id, target)} setDeadline={changeDeadline} blocks={bl.blocks} dragging={dnd} focusTotals={focusTotals} onFocus={startFocus} />
+          <div className="flex min-h-0 flex-col gap-3">
+            {/* On a tablet there is no room for the side panel, so today's image is a slim strip. */}
+            {mode === 'day' && (
+              <div className="min-[1320px]:hidden">
+                <TodaysVisionBanner image={todayImage} canShuffle={canShuffle} onShuffle={() => setShuffle((n) => n + 1)} />
+              </div>
+            )}
+            <Calendar
+              events={ev.events}
+              tasks={t.tasks}
+              completed={completed}
+              blocks={bl.blocks}
+              projects={t.projects}
+              onClasses={() => setClassesOpen(true)}
+              onLength={(id, m) => void resizeBlock(id, m)}
+              onDone={(taskId) => void completeTask(taskId)}
+              onFocus={startFocus}
+              onRemove={(id) => void removeBlock(id)}
+              mode={mode}
+              onMode={setMode}
+            />
           </div>
-        )}
-      </div>
-      <FocusScreen
+          {mode === 'day' && (
+            <div className="hidden min-h-0 min-[1320px]:flex min-[1320px]:flex-col">
+              <TodaysVision image={todayImage} canShuffle={canShuffle} onShuffle={() => setShuffle((n) => n + 1)} onAdd={() => navigate('vision')} />
+            </div>
+          )}
+        </div>
+      )}      <FocusScreen
         focus={focus}
         task={focusTask}
         taskName={focus.state.taskId ? (taskById.get(focus.state.taskId)?.content ?? null) : null}
         taskHue={focusTask ? hueOf(focusTask.projectId, projectsById) : '#FFFFFF'}
         plannedToday={plannedToday}
         onDone={(id) => void completeTask(id)}
+        imageSrc={hero.src}
+        onNextImage={canShuffle ? () => setShuffle((n) => n + 1) : undefined}
       />
       <FocusPill focus={focus} />
       {notificationsOpen && <NotificationsDialog onClose={() => setNotificationsOpen(false)} />}

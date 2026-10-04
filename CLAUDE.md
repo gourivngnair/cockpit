@@ -33,7 +33,7 @@ All task reads and writes go through one task-source layer in `src/tasks/` (Todo
 | Focus timer state and settings | Supabase `focus` (one row: the whole timer as JSON, with a `seq` that only goes up; the higher seq wins across devices). The timer logic is the pure state machine in `src/focus/machine.ts`. |
 | Focus log (one row per focus round, whole or partial) | Supabase `focus_sessions` |
 | Class and meeting events (entered weekly) | Supabase `events` |
-| Vision images | Supabase Storage plus `vision` table |
+| Vision images | Supabase Storage (private bucket `vision`, one folder per user) plus the `vision` table (caption, theme, width, height, `pinned_on`). Each image has a main copy `<user>/<id>.jpg` (at most 1600 px) and a grid copy `<user>/<id>-thumb.jpg` (at most 480 px), both made in the browser before upload. Shown only through short-lived signed links. |
 
 ## Invariants (never break these)
 1. Cockpit never writes a due date to a repeating task. For any other task it writes the due date only as the planned time from the earliest upcoming block (and clears it when none is left); it never touches the Deadline field as a side effect of planning. The Edge Function enforces the repeating check itself (it looks the task up and refuses), not just the UI.
