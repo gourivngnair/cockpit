@@ -50,10 +50,10 @@ Upload images (Supabase Storage), caption and theme per image, masonry grid with
 **Phase 4: Progress**
 One card per goal: hard-course reviews vs weeks elapsed, assignments on time, marks (manual entry), milestones checklist, gym this week out of 3 plus 4-week trend, morning-routine and Bradbury streaks, Bradbury nights out of 1,000, clean-diet daily yes/no (also prompted at the top of the Goals panel), essays and books finished.
 
-**Out of scope:** finance, notes directory, AI features inside the app, sharing, writing dates back to Todoist.
+**Out of scope:** finance, notes directory, AI features inside the app, sharing, changing the dates of repeating tasks, rescheduling existing tasks by dragging. (Setting a deadline on a new non-repeating task, and editing the deadline of an existing non-repeating task, are allowed: see Decisions, 2026-10-04 update.)
 
 ## Constraints
-- Todoist is the source of truth for tasks. Cockpit never changes a task's date.
+- Todoist is the source of truth for tasks. Cockpit never changes a repeating task's date, and never moves a task's date as a side effect of planning (blocks are Cockpit-only). It may set a deadline when a task is created and edit the deadline of a non-repeating task.
 - Free tiers only (Vercel or Netlify hosting, Supabase free plan).
 - Todoist API token stays server-side (Supabase secret), never in the browser bundle.
 - Laptop is Windows; tablet OS to confirm (affects PWA install and notifications).
@@ -75,7 +75,18 @@ One card per goal: hard-course reviews vs weeks elapsed, assignments on time, ma
 - Meetings come from Google Calendar and are out of scope for Phase 1. Event alerts therefore cover classes only for now.
 - Phase 1 right panel (today's vision) is an empty placeholder until Phase 3.
 - Completed tasks are copied into Supabase `done` from Phase 1 step 4 onward, so history accrues.
-- Phase 1 order: (1) calendar + classes, (2) Goals panel in full, (3) work blocks, (4) notifications, update banner, completion history.
+- Phase 1 order: (1) calendar + classes, (2) Goals panel in full, (2b) full New task card and moving tasks, (3) work blocks, (4) notifications, update banner, completion history.
+
+## Decisions (2026-10-04, update)
+- New task card: name, goal, subgoal (label), time needed (Todoist duration), deadline (date and optional time). Saved to Todoist as a normal task.
+- Moving tasks: drag onto a goal heading (moves the project, clears the subgoal) or onto a subgoal (moves project and label); a "Move to" menu does the same on touch devices. Existing non-subgoal labels are preserved.
+- Deadlines: editable on existing non-repeating tasks. Repeating tasks are locked.
+- Time needed: resizing a block also updates the task's duration in Todoist, so it reads the same everywhere.
+- Renaming tasks is not needed for now.
+- Touch drag: press and hold about 0.35 s to pick up a task or block.
+- A task may have several blocks (splitting work across days); needs a `blocks` schema change in step 3.
+- After "Mark done" on a block, the block stays that day, faded and struck through, for the rest of the session; from step 4 done blocks come from saved history.
+- The Focus button in the block card waits for Phase 2.
 - Project lives at `C:\Users\gouri\dev\cockpit` (not OneDrive), backed up on GitHub.
 - Todoist projects and labels match the goals table above exactly.
 

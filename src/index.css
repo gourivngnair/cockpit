@@ -63,32 +63,68 @@
   --radius-block: 10px;
 }
 
-html,
-body,
-#root {
-  height: 100%;
+/* Base styles live in the base layer so Tailwind utilities (text colour, font size) can override them. */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.45 var(--font-sans);
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
 }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font: 14px/1.45 var(--font-sans);
-  letter-spacing: -0.005em;
-  -webkit-font-smoothing: antialiased;
-  padding-top: env(safe-area-inset-top, 0);
-  padding-bottom: env(safe-area-inset-bottom, 0);
+
+/* Drag and drop */
+.flying {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.16);
+  max-width: 240px;
+  font-weight: 500;
+  transform: rotate(-1.5deg);
 }
-button,
-input {
-  font: inherit;
-  color: inherit;
+body.dragging-on,
+body.dragging-on * {
+  cursor: grabbing !important;
+  user-select: none !important;
 }
-button {
-  cursor: pointer;
+[data-dragging='true'] {
+  opacity: 0.4;
 }
-:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
+[data-drop-goal][data-over='true'] {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--ink) 35%, transparent);
+  outline-offset: -2px;
+}
+img {
+  -webkit-user-drag: none;
 }
 @media (prefers-reduced-motion: reduce) {
   * {

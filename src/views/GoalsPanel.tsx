@@ -1,8 +1,13 @@
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { addDays, dayName, parseDay, shortTime, todayStr } from '../lib/dates'
-import { hueOf, type Project, type Task } from '../tasks'
-import { buildGoals, canTick, prettyLabel, type Group } from '../tasks/rules'
+import { goalRank, hueOf, type Due, type Project, type Task } from '../tasks'
+import { SUBGOAL_ORDER, buildGoals, canTick, prettyLabel, type Group } from '../tasks/rules'
+import type { NewTask } from '../tasks/types'
 import { Panel } from '../ui/Shell'
+import { NewTaskDialog, type GoalOption } from './NewTaskDialog'
+import { TaskMenu } from './TaskMenu'
+import type { MoveTarget } from './useTasks'
+import { useTaskDrag } from './useTaskDrag'
 
 interface Props {
   projects: Project[]
@@ -12,7 +17,9 @@ interface Props {
   stale: boolean
   ticked: ReadonlySet<string>
   complete: (id: string) => void
-  add: (content: string, projectId: string | null) => Promise<boolean>
+  add: (task: NewTask) => Promise<boolean>
+  move: (id: string, target: MoveTarget) => void
+  setDeadline: (id: string, due: Due | null) => Promise<boolean>
 }
 
 const LIMIT = 5 // tasks shown per subgoal before "Show more"
@@ -41,7 +48,15 @@ function load<T>(key: string, fallback: T): T {
   }
 }
 
-function TaskRow({ task, hue, complete, locked }: { task: Task; hue: string; complete: (id: string) => void; locked: boolean }) {
+interface RowProps {
+  task: Task
+  hue: string
+  complete: (id: string) => void
+  locked: boolean
+  onMenu: (task: Task, anchor: DOMRect) => void
+}
+
+function TaskRow({ task, hue, complete, locked, onMenu }: RowProps) {
   const today = todayStr()
   const d = task.due
   const repeating = task.recurring
@@ -51,17 +66,23 @@ function TaskRow({ task, hue, complete, locked }: { task: Task; hue: string; com
   const rhythm = repeating && d?.time ? `${shortTime(d.time)} daily` : null
 
   return (
-    <div className="flex items-center gap-2.5 rounded-[10px] px-1.5 py-[7px] hover:bg-soft" data-task={task.id} style={{ ['--h' as string]: hue }}>
+    <div
+      className="group flex cursor-grab select-none items-center gap-2.5 rounded-[10px] px-1.5 py-[7px] hover:bg-soft [touch-action:pan-y] [-webkit-touch-callout:none] [@media(pointer:coarse)]:py-2.5"
+      data-task={task.id}
+      data-drag-task={task.id}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{ ['--h' as string]: hue }}
+    >
       <button
         type="button"
         aria-label={`Complete ${task.content}`}
         aria-disabled={disabled}
         disabled={disabled}
         onClick={() => complete(task.id)}
-        className="size-[18px] flex-none rounded-[5px] border-[1.5px] border-grey-line bg-panel p-0 hover:border-[var(--h)] disabled:cursor-default disabled:opacity-35"
+        className="size-[18px] flex-none rounded-[5px] border-[1.5px] border-grey-line bg-panel p-0 hover:border-[var(--h)] disabled:cursor-default disabled:opacity-35 [@media(pointer:coarse)]:size-[22px]"
         style={disabled ? { background: `color-mix(in srgb, ${hue} 20%, var(--panel))` } : undefined}
       />
-      <span className="min-w-0 flex-1 [overflow-wrap:anywhere] text-ink2">
+      <span data-task-title className="min-w-0 flex-1 [overflow-wrap:anywhere] text-ink2">
         <Title text={task.content} />
       </span>
       {deadline && (
@@ -74,24 +95,54 @@ function TaskRow({ task, hue, complete, locked }: { task: Task; hue: string; com
         </span>
       )}
       {rhythm && <span className="flex-none whitespace-nowrap rounded-md bg-grey-fill px-[7px] py-0.5 text-[11.5px] font-medium text-grey-ink">{rhythm}</span>}
+      <button
+        type="button"
+        aria-label={`Options for ${task.content}`}
+        aria-haspopup="menu"
+        onClick={(e) => onMenu(task, e.currentTarget.getBoundingClientRect())}
+        className="grid size-6 flex-none place-items-center rounded-md text-muted opacity-0 hover:bg-line focus:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="5" cy="12" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="19" cy="12" r="2" />
+        </svg>
+      </button>
     </div>
   )
 }
 
-function Subgoal({ group, showOther, hue, open, onToggle, ticked, complete }: { group: Group; showOther: boolean; hue: string; open: boolean; onToggle: () => void; ticked: ReadonlySet<string>; complete: (id: string) => void }) {
+interface SubProps {
+  group: Group
+  goalId: string
+  showOther: boolean
+  hue: string
+  open: boolean
+  onToggle: () => void
+  ticked: ReadonlySet<string>
+  complete: (id: string) => void
+  onMenu: RowProps['onMenu']
+}
+
+function Subgoal({ group, goalId, showOther, hue, open, onToggle, ticked, complete, onMenu }: SubProps) {
   const shown = open ? group.tasks : group.tasks.slice(0, LIMIT)
   const hidden = group.tasks.length - LIMIT
   return (
     <div className="my-0.5 mb-1 ml-3.5 border-l-2 pl-2" style={{ borderColor: `color-mix(in srgb, ${hue} 25%, var(--panel))` }}>
       {(group.label !== null || showOther) && (
-        <div className="flex items-center gap-[7px] px-1.5 pb-0.5 pt-1.5 text-xs font-semibold tracking-[0.01em]" style={{ color: hue }}>
+        <div
+          data-drop-goal={goalId}
+          data-drop-sub={group.label ?? ''}
+          className="flex items-center gap-[7px] rounded-lg px-1.5 pb-0.5 pt-1.5 text-xs font-semibold tracking-[0.01em]"
+          style={{ color: hue }}
+        >
           <i className="size-1.5 rounded-full" style={{ background: hue }} />
           {group.label === null ? 'Other' : prettyLabel(group.label)}
           <span className="ml-auto font-medium text-muted">{group.tasks.length}</span>
         </div>
       )}
       {shown.map((t) => (
-        <TaskRow key={t.id} task={t} hue={hue} complete={complete} locked={ticked.has(t.id)} />
+        <TaskRow key={t.id} task={t} hue={hue} complete={complete} locked={ticked.has(t.id)} onMenu={onMenu} />
       ))}
       {hidden > 0 && (
         <button type="button" onClick={onToggle} className="w-full rounded-[10px] border-0 bg-transparent px-1.5 py-1 text-left text-[12.5px] text-muted hover:bg-soft">
@@ -102,51 +153,34 @@ function Subgoal({ group, showOther, hue, open, onToggle, ticked, complete }: { 
   )
 }
 
-function AddTask({ projectId, adding, setAdding, add }: { projectId: string; adding: boolean; setAdding: (v: boolean) => void; add: Props['add'] }) {
-  const input = useRef<HTMLInputElement>(null)
-  if (!adding) {
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setAdding(true)
-          setTimeout(() => input.current?.focus(), 0)
-        }}
-        className="flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-1.5 text-left text-muted hover:bg-soft"
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        Add task
-      </button>
-    )
-  }
-  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape') setAdding(false)
-    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-      const text = e.currentTarget.value
-      e.currentTarget.value = ''
-      void add(text, projectId)
-    }
-  }
-  return (
-    <input
-      ref={input}
-      autoFocus
-      aria-label="New task"
-      placeholder="New task, press Enter"
-      onKeyDown={onKey}
-      onBlur={(e) => !e.currentTarget.value && setAdding(false)}
-      className="my-0.5 mb-1 w-full rounded-[10px] border border-line bg-soft px-2.5 py-2"
-    />
-  )
+/** While dragging, every subgoal of a goal is shown (even empty ones) so there is somewhere to drop. */
+function withDropZones(name: string, groups: Group[], dragging: boolean): Group[] {
+  const subs = SUBGOAL_ORDER[name] ?? []
+  if (!dragging || subs.length === 0) return groups
+  const byLabel = new Map(groups.map((g) => [g.label, g]))
+  const zones = subs.map((s) => byLabel.get(s) ?? { label: s, tasks: [] })
+  zones.push(byLabel.get(null) ?? { label: null, tasks: [] })
+  return zones
 }
 
-export function GoalsPanel({ projects, tasks, status, error, stale, ticked, complete, add }: Props) {
-  const byId = Object.fromEntries(projects.map((p) => [p.id, p]))
+export function GoalsPanel({ projects, tasks, status, error, stale, ticked, complete, add, move, setDeadline }: Props) {
+  const byId = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects])
   const goals = buildGoals(projects, tasks)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => load('cockpit-ui', {}))
-  const [adding, setAdding] = useState<string | null>(null)
+  const [dialogGoal, setDialogGoal] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ task: Task; anchor: DOMRect } | null>(null)
+
+  const dragging = useTaskDrag(move)
+
+  const allGoals: GoalOption[] = useMemo(
+    () =>
+      projects
+        .filter((p) => !p.parentId || !byId[p.parentId])
+        .sort((a, b) => goalRank(a) - goalRank(b))
+        .map((p) => ({ project: p, name: p.inbox ? 'Unsorted (Inbox)' : p.name })),
+    [projects, byId],
+  )
+  const firstGoalId = allGoals.find((g) => !g.project.inbox)?.project.id ?? allGoals[0]?.project.id ?? ''
 
   const flip = (key: string) => {
     const next = { ...collapsed, [key]: !collapsed[key] }
@@ -158,10 +192,31 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
     }
   }
 
+  const rootGoalOf = useCallback(
+    (t: Task) => {
+      let p = byId[t.projectId]
+      while (p?.parentId && byId[p.parentId]) p = byId[p.parentId]
+      return p?.id ?? t.projectId
+    },
+    [byId],
+  )
+
   return (
     <Panel>
       <div className="flex items-center justify-between px-4 pb-2.5 pt-4">
         <h2 className="m-0 text-[15px] font-semibold">Goals</h2>
+        <button
+          type="button"
+          aria-label="New task"
+          title="New task"
+          disabled={!firstGoalId}
+          onClick={() => setDialogGoal(firstGoalId)}
+          className="grid size-[30px] place-items-center rounded-lg text-ink2 hover:bg-soft disabled:opacity-40"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
       </div>
       {status === 'loading' && <p className="m-0 px-4 pb-2 text-xs text-muted">Syncing with Todoist</p>}
       {status === 'error' && (
@@ -170,14 +225,16 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
           {stale ? ' Showing the last saved copy.' : ''}
         </p>
       )}
-      <div className="min-h-0 flex-1 overflow-auto px-2.5 pb-4">
+      <div data-goals-scroll className="min-h-0 flex-1 overflow-auto px-2.5 pb-4">
         {goals.map(({ project, name, tasks: gt, groups }) => {
           const hue = hueOf(project.id, byId)
-          const closed = Boolean(collapsed[project.id])
+          const closed = Boolean(collapsed[project.id]) && !dragging
+          const shownGroups = withDropZones(project.inbox ? '' : project.name, groups, dragging !== null)
           return (
             <div key={project.id} className="mb-1.5" data-goal={name}>
               <button
                 type="button"
+                data-drop-goal={project.id}
                 aria-expanded={!closed}
                 onClick={() => flip(project.id)}
                 className="flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-2 text-left hover:bg-soft"
@@ -196,20 +253,31 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
               </button>
               {!closed && (
                 <>
-                  {groups.map((g) => (
+                  {shownGroups.map((g) => (
                     <Subgoal
                       key={g.label ?? '_'}
                       group={g}
-                      showOther={groups.length > 1}
+                      goalId={project.id}
+                      showOther={shownGroups.length > 1}
                       hue={hue}
                       open={Boolean(collapsed[`more:${project.id}:${g.label ?? '_'}`])}
                       onToggle={() => flip(`more:${project.id}:${g.label ?? '_'}`)}
                       ticked={ticked}
                       complete={complete}
+                      onMenu={(task, anchor) => setMenu({ task, anchor })}
                     />
                   ))}
                   <div className="ml-3.5 pl-2.5">
-                    <AddTask projectId={project.id} adding={adding === project.id} setAdding={(v) => setAdding(v ? project.id : null)} add={(text, pid) => add(text, project.inbox ? null : pid)} />
+                    <button
+                      type="button"
+                      onClick={() => setDialogGoal(project.id)}
+                      className="flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-1.5 text-left text-muted hover:bg-soft"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                      Add task
+                    </button>
                   </div>
                 </>
               )}
@@ -218,6 +286,19 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
         })}
         {status !== 'loading' && goals.length === 0 && <p className="px-1.5 text-xs text-muted">No projects yet.</p>}
       </div>
+
+      {dialogGoal !== null && <NewTaskDialog goals={allGoals} initialGoalId={dialogGoal} onSubmit={add} onClose={() => setDialogGoal(null)} />}
+      {menu && (
+        <TaskMenu
+          task={menu.task}
+          goals={allGoals.map((g) => ({ id: g.project.id, name: g.project.inbox ? 'Unsorted' : g.name }))}
+          currentGoalId={rootGoalOf(menu.task)}
+          anchor={menu.anchor}
+          onMove={(target) => move(menu.task.id, target)}
+          onDeadline={(due) => setDeadline(menu.task.id, due)}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </Panel>
   )
 }

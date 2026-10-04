@@ -23,7 +23,7 @@ All task reads and writes go through one task-source layer in `src/tasks/` (Todo
 ## Data ownership
 | Data | Lives in |
 |---|---|
-| Tasks, projects, labels, repeat rules, deadlines | Todoist (read; Cockpit may only add tasks and complete tasks) |
+| Tasks, projects, labels, repeat rules, deadlines | Todoist. Cockpit may: add tasks (with goal, subgoal label, time needed, optional deadline); complete tasks; move tasks between goals and subgoals (project and label); edit the deadline of a non-repeating task; set a task's time needed (duration, including when a block is resized). Nothing else. (Decided 2026-10-04.) |
 | Work blocks (task id, date, start, minutes) | Supabase `blocks` |
 | Completion history copy | Supabase `done` (one row per task occurrence) |
 | Clean-diet answers, marks | Supabase `diet`, `marks` |
@@ -32,7 +32,7 @@ All task reads and writes go through one task-source layer in `src/tasks/` (Todo
 | Vision images | Supabase Storage plus `vision` table |
 
 ## Invariants (never break these)
-1. Cockpit never writes a due date to Todoist.
+1. Cockpit writes a due date to Todoist only (a) when creating a new non-repeating task, or (b) when the user edits the deadline of an existing non-repeating task. Never for a repeating task. Never as a side effect of moving or resizing a block. The Edge Function enforces the repeating check itself (it looks the task up and refuses), not just the UI.
 2. Repeating tasks cannot be dragged, resized or rescheduled in Cockpit.
 3. A repeating task's checkbox is disabled when its next due date is after today.
 4. Every write is optimistic, then confirmed; on failure, roll back and show a toast. No silent failures.

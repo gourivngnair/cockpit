@@ -101,12 +101,31 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 export const todoistSource: TaskSource = {
-  async createTask(content, projectId) {
-    const raw = await call<RawTask>({ action: 'create', content, ...(projectId ? { projectId } : {}) })
+  async createTask(input) {
+    const raw = await call<RawTask>({
+      action: 'create',
+      content: input.content,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
+      ...(input.label ? { labels: [input.label] } : {}),
+      ...(input.durationMin ? { durationMin: input.durationMin } : {}),
+      ...(input.due ? { due: input.due } : {}),
+    })
     return toTask(raw)
   },
   async completeTask(id) {
     await call({ action: 'close', id })
+  },
+  async moveTask(id, projectId) {
+    await call({ action: 'move', id, projectId })
+  },
+  async setLabels(id, labels) {
+    await call({ action: 'setLabels', id, labels })
+  },
+  async setDeadline(id, due) {
+    await call({ action: 'setDeadline', id, due })
+  },
+  async setDuration(id, minutes) {
+    await call({ action: 'setDuration', id, minutes })
   },
   async listProjects() {
     const raw = await fetchAll<RawProject>('projects')

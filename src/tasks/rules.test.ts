@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildGoals, canTick } from './rules'
+import { buildGoals, canTick, labelsWithSubgoal, subgoalOf } from './rules'
 import type { Project, Task } from './types'
 
 const proj = (id: string, name: string, over: Partial<Project> = {}): Project => ({
@@ -65,7 +65,7 @@ describe('buildGoals', () => {
       task('d', 'gpa', { labels: ['mystery'] }),
       task('e', 'gpa', { labels: ['end-terms'] }),
     ])
-    expect(goals[0].groups.map((g) => g.label)).toEqual(['hard-courses', 'end-terms', 'assignments', 'mystery', null])
+    expect(goals[0].groups.map((g) => g.label)).toEqual(['hard-courses', 'end-terms', 'assignments', null])
   })
 
   it('sorts tasks by due date, undated last, keeping Todoist order for ties', () => {
@@ -76,5 +76,17 @@ describe('buildGoals', () => {
       task('soon2', 'gpa', { due: { date: '2026-10-06', time: '09:00' } }),
     ])
     expect(goals[0].tasks.map((t) => t.id)).toEqual(['soon', 'soon2', 'late', 'none'])
+  })
+})
+
+describe('subgoal labels', () => {
+  it('finds the subgoal among the goal\'s own labels only', () => {
+    expect(subgoalOf({ labels: ['urgent', 'assignments'] }, ['hard-courses', 'assignments'])).toBe('assignments')
+    expect(subgoalOf({ labels: ['gym'] }, ['hard-courses', 'assignments'])).toBeNull()
+  })
+  it('replaces the subgoal but keeps unrelated labels', () => {
+    expect(labelsWithSubgoal(['gym', 'urgent'], 'assignments')).toEqual(['assignments', 'urgent'])
+    expect(labelsWithSubgoal(['gym', 'urgent'], null)).toEqual(['urgent'])
+    expect(labelsWithSubgoal([], 'gym')).toEqual(['gym'])
   })
 })

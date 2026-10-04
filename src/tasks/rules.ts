@@ -9,6 +9,18 @@ export const SUBGOAL_ORDER: Record<string, string[]> = {
   'Better Writer': ['substack', 'bradbury', 'monthly-book'],
 }
 
+/** Every label that counts as a subgoal. Other labels are kept but never used for grouping. */
+export const SUBGOAL_LABELS: ReadonlySet<string> = new Set(Object.values(SUBGOAL_ORDER).flat())
+
+/** The task's subgoal within a goal: its first label that is one of that goal's subgoals, or null. */
+export const subgoalOf = (t: Pick<Task, 'labels'>, allowed: readonly string[]): string | null => t.labels.find((l) => allowed.includes(l)) ?? null
+
+/** New label list after choosing a subgoal (null clears it). Non-subgoal labels are preserved. */
+export function labelsWithSubgoal(labels: string[], subgoal: string | null): string[] {
+  const rest = labels.filter((l) => !SUBGOAL_LABELS.has(l))
+  return subgoal ? [subgoal, ...rest] : rest
+}
+
 /**
  * Invariant 3: a repeating task's checkbox is disabled when its next due date
  * is after today (today's occurrence is already done).
@@ -55,7 +67,7 @@ export function buildGoals(projects: Project[], tasks: Task[]): Goal[] {
       const order = SUBGOAL_ORDER[project.name] ?? []
       const labels: string[] = []
       for (const t of sorted) {
-        const l = t.labels[0]
+        const l = subgoalOf(t, order)
         if (l && !labels.includes(l)) labels.push(l)
       }
       labels.sort((a, b) => {
@@ -63,8 +75,8 @@ export function buildGoals(projects: Project[], tasks: Task[]): Goal[] {
         const ib = order.indexOf(b)
         return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
       })
-      const groups: Group[] = labels.map((label) => ({ label, tasks: sorted.filter((t) => t.labels[0] === label) }))
-      const bare = sorted.filter((t) => t.labels.length === 0)
+      const groups: Group[] = labels.map((label) => ({ label, tasks: sorted.filter((t) => subgoalOf(t, order) === label) }))
+      const bare = sorted.filter((t) => subgoalOf(t, order) === null)
       if (bare.length) groups.push({ label: null, tasks: bare })
       return { project, name: project.inbox ? 'Unsorted' : project.name, tasks: sorted, groups }
     })

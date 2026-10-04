@@ -95,26 +95,59 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
   await page.route('**/functions/v1/todoist', async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
-    const body = req.postDataJSON() as { path?: string; action?: string; content?: string; projectId?: string; id?: string }
+    const body = req.postDataJSON() as {
+      path?: string
+      action?: string
+      content?: string
+      projectId?: string
+      labels?: string[]
+      durationMin?: number
+      due?: { date: string; time?: string | null } | null
+      minutes?: number
+      id?: string
+    }
 
     if (body.action) {
       backend.todoistWrites.push(body)
       if (backend.failTodoistWrites) return json(route, { error: 'boom' }, 500)
-      if (body.action === 'create') {
-        const t: FakeTask = { id: `new-${backend.tasks.length}`, content: body.content ?? '', project_id: body.projectId ?? 'inbox', labels: [], due: null }
-        backend.tasks.push(t)
-        return json(route, t)
-      }
-      if (body.action === 'close') {
-        const t = backend.tasks.find((x) => x.id === body.id)
-        if (t?.due?.is_recurring) {
-          // Todoist moves a repeating task to its next occurrence.
-          const [d, time] = t.due.date.split('T')
-          t.due = { ...t.due, date: addDays(d, 1) + (time ? `T${time}` : '') }
-        } else {
-          backend.tasks = backend.tasks.filter((x) => x.id !== body.id)
+      const t = backend.tasks.find((x) => x.id === body.id)
+      switch (body.action) {
+        case 'create': {
+          const created: FakeTask = {
+            id: `new-${backend.tasks.length}`,
+            content: body.content ?? '',
+            project_id: body.projectId ?? 'inbox',
+            labels: body.labels ?? [],
+            due: body.due ? { date: body.due.date + (body.due.time ? `T${body.due.time}:00` : '') } : null,
+            duration: body.durationMin ? { amount: body.durationMin, unit: 'minute' } : null,
+          }
+          backend.tasks.push(created)
+          return json(route, created)
         }
-        return json(route, {})
+        case 'close':
+          if (t?.due?.is_recurring) {
+            // Todoist moves a repeating task to its next occurrence.
+            const [d, time] = t.due.date.split('T')
+            t.due = { ...t.due, date: addDays(d, 1) + (time ? `T${time}` : '') }
+          } else {
+            backend.tasks = backend.tasks.filter((x) => x.id !== body.id)
+          }
+          return json(route, { ok: true })
+        case 'move':
+          if (t) t.project_id = body.projectId!
+          return json(route, { ok: true })
+        case 'setLabels':
+          if (t) t.labels = body.labels
+          return json(route, { ok: true })
+        case 'setDeadline':
+        case 'setDuration':
+          // Same rule as the real function: a repeating task is never touched.
+          if (t?.due?.is_recurring) return json(route, { error: 'This task repeats in Todoist, so Cockpit will not change it.' }, 409)
+          if (t && body.action === 'setDeadline') {
+            t.due = body.due ? { date: body.due.date + (body.due.time ? `T${body.due.time}:00` : '') } : null
+          }
+          if (t && body.action === 'setDuration') t.duration = { amount: body.minutes!, unit: 'minute' }
+          return json(route, { ok: true })
       }
     }
     return json(route, { results: body.path === 'projects' ? projects : backend.tasks })
