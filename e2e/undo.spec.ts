@@ -55,14 +55,14 @@ test.describe('undo and redo', () => {
 
     await page.keyboard.press(UNDO)
     await expect(page.locator('[data-kind="block"]')).toHaveCount(0)
-    expect(be.blockWrites.map((w) => w.method)).toEqual(['POST', 'DELETE'])
-    expect(be.blockWrites[1].id).toBe(createdId)
+    await expect.poll(() => be.blockWrites.map((w) => w.method)).toEqual(['POST', 'DELETE'])
+    await expect.poll(() => be.blockWrites[1]?.id).toBe(createdId)
     await expect(page.getByRole('status').last()).toContainText('Undid: Planned "Write report"')
     await expect(redoButton(page)).toBeEnabled()
 
     await page.keyboard.press(REDO)
     await expect(page.locator('[data-kind="block"]')).toHaveCount(1)
-    expect(be.blockWrites.at(-1)!.method).toBe('POST')
+    await expect.poll(() => be.blockWrites.at(-1)?.method).toBe('POST')
     expect(be.blockWrites.at(-1)!.body).toMatchObject({ id: createdId, task_id: 'Write report', start_time: '09:00' })
   })
 
@@ -114,8 +114,8 @@ test.describe('undo and redo', () => {
 
     await page.keyboard.press(UNDO)
     await expect(page.locator('[data-block="b1"]')).toBeVisible()
-    expect(be.blockWrites.map((w) => w.method)).toEqual(['DELETE', 'POST'])
-    expect(be.blockWrites[1].body).toMatchObject({ id: 'b1', task_id: 'Write report', start_time: '09:00', minutes: 30 })
+    await expect.poll(() => be.blockWrites.map((w) => w.method)).toEqual(['DELETE', 'POST'])
+    await expect.poll(() => be.blockWrites[1]?.body).toMatchObject({ id: 'b1', task_id: 'Write report', start_time: '09:00', minutes: 30 })
   })
 
   test('undoing a planned block also clears the planned time in Todoist', async ({ page }) => {
@@ -204,7 +204,7 @@ test.describe('undo and redo', () => {
     await expect(page.locator('[data-kind="block"]', { hasText: 'A' })).toHaveCount(1)
     await page.keyboard.press(UNDO)
     await expect(page.locator('[data-kind="block"]')).toHaveCount(0)
-    expect(be.blockWrites.map((w) => w.method)).toEqual(['POST', 'POST', 'DELETE', 'DELETE'])
+    await expect.poll(() => be.blockWrites.map((w) => w.method)).toEqual(['POST', 'POST', 'DELETE', 'DELETE'])
   })
 
   test('Ctrl+Z while typing in a field undoes the typing, not the app', async ({ page }) => {
@@ -216,7 +216,7 @@ test.describe('undo and redo', () => {
     await page.getByLabel('Task', { exact: true }).fill('typing here')
     await page.keyboard.press(UNDO)
     await expect(page.locator('[data-kind="block"]')).toHaveCount(1)
-    expect(be.blockWrites.map((w) => w.method)).toEqual(['POST'])
+    await expect.poll(() => be.blockWrites.map((w) => w.method)).toEqual(['POST'])
   })
 
   test('Ctrl+Z pressed while the save is still in flight waits for it, then undoes it', async ({ page }) => {
@@ -227,7 +227,7 @@ test.describe('undo and redo', () => {
     await page.keyboard.press(UNDO) // pressed straight away, before the save has finished
     be.blockDelayMs = 0
     await expect(page.locator('[data-kind="block"]')).toHaveCount(0)
-    expect(be.blockWrites.map((w) => w.method)).toEqual(['POST', 'DELETE'])
+    await expect.poll(() => be.blockWrites.map((w) => w.method)).toEqual(['POST', 'DELETE'])
     await expect(page.getByRole('status').last()).not.toContainText('Nothing to undo')
   })
 
@@ -240,7 +240,7 @@ test.describe('undo and redo', () => {
     await page.keyboard.press(UNDO)
     await page.keyboard.press(UNDO)
     await expect(page.locator('[data-kind="block"]')).toHaveCount(0)
-    expect(be.blockWrites.map((w) => w.method)).toEqual(['POST', 'POST', 'DELETE', 'DELETE'])
+    await expect.poll(() => be.blockWrites.map((w) => w.method)).toEqual(['POST', 'POST', 'DELETE', 'DELETE'])
   })
 
   test('a failed undo leaves the action on the list so it can be tried again', async ({ page }) => {

@@ -95,7 +95,7 @@ test.describe('creating blocks', () => {
     await expect(page.locator('[data-kind="block"]')).toHaveCount(1)
     await dragToSlot(page, page.locator('[data-task="Big project"]'), lane, 14)
     await expect(page.locator('[data-kind="block"]')).toHaveCount(2)
-    expect(be.blockWrites.map((w) => w.method)).toEqual(['POST', 'POST'])
+    await expect.poll(() => be.blockWrites.map((w) => w.method)).toEqual(['POST', 'POST'])
     await expect(page.locator('[data-task="Big project"] [title="Planned on the calendar"]')).toHaveText('9a +1')
   })
 
@@ -296,7 +296,7 @@ test.describe('block card', () => {
     await page.locator('[data-block="b1"]').click({ position: { x: 20, y: 10 } })
     await page.getByRole('dialog', { name: 'Block for Write report' }).getByRole('button', { name: 'Remove block' }).click()
     await expect(page.locator('[data-block="b1"]')).toHaveCount(0)
-    expect(be.blockWrites.map((w) => w.method)).toEqual(['DELETE'])
+    await expect.poll(() => be.blockWrites.map((w) => w.method)).toEqual(['DELETE'])
     await expect(page.locator('[data-task="Write report"]')).toBeVisible()
     expect(be.todoistWrites).toHaveLength(0)
   })
