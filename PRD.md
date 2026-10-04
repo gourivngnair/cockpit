@@ -70,8 +70,12 @@ One card per goal: hard-course reviews vs weeks elapsed, assignments on time, ma
 ## Decisions (2026-10-04)
 - Tablet: Samsung Galaxy Tab S9 FE (Android, Chrome). PWA installs natively and supports web push. Laptop: Windows, Chrome or Edge.
 - Todoist plan: Pro. Task durations are the default block length. The due date and time stays the deadline (lesson 6 still applies; the paid deadline field is not used).
-- Notifications (build at the end of Phase 1, via web push + a scheduled Supabase job): (a) event starting, for classes and meetings; (b) deadline approaching, 24 hours before the due time (lead time is a setting). Focus-phase-ending alerts are not wanted.
-- Class schedule: Gouri enters the coming week's classes every Sunday. Needs a Supabase `events` table and a quick entry screen (repeat last week, edit). Built in Phase 1; events show as grey dashed blocks.
+- Notifications (build in Phase 1 step 4, via web push + a scheduled Supabase job): (a) class starting, 10 minutes before; (b) deadline approaching, 24 hours before the due time, any time of day (no quiet hours). Lead times are settings. Focus-phase-ending alerts are not wanted.
+- Class schedule: classes change every week. Each Sunday Gouri shares a screenshot of the schedule in a Claude chat; Claude turns it into JSON, and she pastes it into an "Import week" box in Cockpit (plus a small editor for fixes). Needs a Supabase `events` table. Events show as grey dashed blocks.
+- Meetings come from Google Calendar and are out of scope for Phase 1. Event alerts therefore cover classes only for now.
+- Phase 1 right panel (today's vision) is an empty placeholder until Phase 3.
+- Completed tasks are copied into Supabase `done` from Phase 1 step 4 onward, so history accrues.
+- Phase 1 order: (1) calendar + classes, (2) Goals panel in full, (3) work blocks, (4) notifications, update banner, completion history.
 - Project lives at `C:\Users\gouri\dev\cockpit` (not OneDrive), backed up on GitHub.
 - Todoist projects and labels match the goals table above exactly.
 
