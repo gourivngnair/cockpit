@@ -62,6 +62,8 @@ export function useTasks() {
   })
   // Repeating tasks ticked this session, until Todoist reports their next date.
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set())
+  // Tasks completed this session, so their blocks can stay on the calendar, faded, until you reload.
+  const [completed, setCompleted] = useState<Task[]>([])
   const inFlight = useRef(new Set<string>())
   const tasksRef = useRef(state.tasks)
   const projectsRef = useRef(state.projects)
@@ -109,7 +111,10 @@ export function useTasks() {
       }
       inFlight.current.add(id)
       if (task.recurring) setTicked((s) => new Set(s).add(id))
-      else setState((s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== id) }))
+      else {
+        setState((s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== id) }))
+        setCompleted((c) => [...c, task])
+      }
       try {
         await taskSource.completeTask(id)
         if (task.recurring) void load() // pick up the next occurrence
@@ -121,6 +126,7 @@ export function useTasks() {
             return n
           })
         } else {
+          setCompleted((c) => c.filter((t) => t.id !== id))
           setState((s) => {
             const tasks = [...s.tasks]
             tasks.splice(Math.min(index, tasks.length), 0, task)
@@ -223,5 +229,24 @@ export function useTasks() {
     [patchTask, toast],
   )
 
-  return { ...state, ticked, reload: load, complete, add, move, setDeadline }
+  /** Sets a task's time needed in Todoist (used when a block is resized). Never for repeating tasks. */
+  const setDuration = useCallback(
+    async (id: string, minutes: number) => {
+      const task = tasksRef.current.find((t) => t.id === id)
+      if (!task || task.recurring || id.startsWith('tmp-') || task.durationMin === minutes) return true
+      const before = task.durationMin
+      patchTask(id, { durationMin: minutes })
+      try {
+        await taskSource.setDuration(id, minutes)
+        return true
+      } catch (e) {
+        patchTask(id, { durationMin: before })
+        toast(`The block was saved, but Todoist's time needed was not updated${why(e)}.`)
+        return false
+      }
+    },
+    [patchTask, toast],
+  )
+
+  return { ...state, ticked, completed, reload: load, complete, add, move, setDeadline, setDuration }
 }

@@ -46,12 +46,31 @@ export const DEFAULT_PROJECTS: FakeProject[] = [
   { id: 'p1', name: 'Term 2 GPA', color: 'berry_red', child_order: 1 },
 ]
 
+export interface FakeBlock {
+  id: string
+  task_id: string
+  date: string
+  start_time: string // HH:MM:SS as Postgres returns it
+  minutes: number
+}
+
+export interface BlockWrite {
+  method: string
+  /** The JSON body Cockpit sent (insert row or update fields). */
+  body: Record<string, unknown> | null
+  id: string | null
+}
+
 export interface Backend {
   events: FakeEvent[]
   tasks: FakeTask[]
+  blocks: FakeBlock[]
   failEventWrites: boolean
   failTodoistWrites: boolean
+  failBlockWrites: boolean
   eventWrites: number
+  /** Every insert, update and delete Cockpit sent for blocks. */
+  blockWrites: BlockWrite[]
   /** Every create/close request body the function received. */
   todoistWrites: Array<Record<string, unknown>>
 }
@@ -60,6 +79,7 @@ interface Opts {
   tasks?: FakeTask[]
   events?: FakeEvent[]
   projects?: FakeProject[]
+  blocks?: FakeBlock[]
 }
 
 /** Signs the page in with a fake session and mocks Supabase REST and the Todoist function. */
@@ -67,9 +87,12 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
   const backend: Backend = {
     events: opts.events ?? [],
     tasks: [...(opts.tasks ?? [])],
+    blocks: [...(opts.blocks ?? [])],
     failEventWrites: false,
     failTodoistWrites: false,
+    failBlockWrites: false,
     eventWrites: 0,
+    blockWrites: [],
     todoistWrites: [],
   }
   const projects = (opts.projects ?? DEFAULT_PROJECTS).map((p) => ({ parent_id: null, inbox_project: false, is_archived: false, child_order: 0, ...p }))
@@ -151,6 +174,28 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
       }
     }
     return json(route, { results: body.path === 'projects' ? projects : backend.tasks })
+  })
+
+  await page.route('**/rest/v1/blocks**', async (route) => {
+    const req = route.request()
+    const method = req.method()
+    if (method === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    if (method === 'GET') return json(route, backend.blocks)
+    const eq = /[?&]id=eq\.([^&]+)/.exec(req.url())
+    const id = eq ? decodeURIComponent(eq[1]) : null
+    const body = method === 'DELETE' ? null : (req.postDataJSON() as Record<string, unknown>)
+    backend.blockWrites.push({ method, body, id })
+    if (backend.failBlockWrites) return json(route, { message: 'boom' }, 500)
+    if (method === 'POST') {
+      const rows = (Array.isArray(body) ? body : [body]) as unknown as FakeBlock[]
+      rows.forEach((r) => backend.blocks.push({ ...r, start_time: `${(r as unknown as { start_time: string }).start_time}:00` }))
+    } else if (method === 'PATCH' && id && body) {
+      const b = backend.blocks.find((x) => x.id === id)
+      if (b) Object.assign(b, body, { start_time: `${String(body.start_time)}:00` })
+    } else if (method === 'DELETE' && id) {
+      backend.blocks = backend.blocks.filter((x) => x.id !== id)
+    }
+    return route.fulfill({ status: method === 'POST' ? 201 : 204, headers: CORS, body: '' })
   })
 
   await page.route('**/rest/v1/events**', async (route) => {

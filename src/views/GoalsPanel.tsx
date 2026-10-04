@@ -3,11 +3,12 @@ import { addDays, dayName, parseDay, shortTime, todayStr } from '../lib/dates'
 import { goalRank, hueOf, type Due, type Project, type Task } from '../tasks'
 import { SUBGOAL_ORDER, buildGoals, canTick, prettyLabel, type Group } from '../tasks/rules'
 import type { NewTask } from '../tasks/types'
+import type { Block } from '../blocks/useBlocks'
+import type { Dragging } from '../dnd/useDnd'
 import { Panel } from '../ui/Shell'
 import { NewTaskDialog, type GoalOption } from './NewTaskDialog'
 import { TaskMenu } from './TaskMenu'
 import type { MoveTarget } from './useTasks'
-import { useTaskDrag } from './useTaskDrag'
 
 interface Props {
   projects: Project[]
@@ -20,6 +21,8 @@ interface Props {
   add: (task: NewTask) => Promise<boolean>
   move: (id: string, target: MoveTarget) => void
   setDeadline: (id: string, due: Due | null) => Promise<boolean>
+  blocks: Block[]
+  dragging: Dragging
 }
 
 const LIMIT = 5 // tasks shown per subgoal before "Show more"
@@ -54,10 +57,21 @@ interface RowProps {
   complete: (id: string) => void
   locked: boolean
   onMenu: (task: Task, anchor: DOMRect) => void
+  plan: Block[]
 }
 
-function TaskRow({ task, hue, complete, locked, onMenu }: RowProps) {
+/** When the task is planned: its next block, plus a count if there are more. */
+function planChip(plan: Block[]): string | null {
   const today = todayStr()
+  const next = plan.filter((b) => b.date >= today).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
+  if (next.length === 0) return null
+  const more = next.length > 1 ? ` +${next.length - 1}` : ''
+  return `${relDay(next[0].date)}${shortTime(next[0].start)}${more}`
+}
+
+function TaskRow({ task, hue, complete, locked, onMenu, plan }: RowProps) {
+  const today = todayStr()
+  const planned = planChip(plan)
   const d = task.due
   const repeating = task.recurring
   const disabled = locked || !canTick(task, today)
@@ -70,6 +84,8 @@ function TaskRow({ task, hue, complete, locked, onMenu }: RowProps) {
       className="group flex cursor-grab select-none items-center gap-2.5 rounded-[10px] px-1.5 py-[7px] hover:bg-soft [touch-action:pan-y] [-webkit-touch-callout:none] [@media(pointer:coarse)]:py-2.5"
       data-task={task.id}
       data-drag-task={task.id}
+      data-recurring={task.recurring}
+      data-minutes={task.durationMin ?? 30}
       onContextMenu={(e) => e.preventDefault()}
       style={{ ['--h' as string]: hue }}
     >
@@ -92,6 +108,15 @@ function TaskRow({ task, hue, complete, locked, onMenu }: RowProps) {
           title="Deadline"
         >
           {deadline}
+        </span>
+      )}
+      {planned && (
+        <span
+          className="flex-none whitespace-nowrap rounded-md px-[7px] py-0.5 text-[11.5px] font-medium"
+          style={{ color: hue, background: `color-mix(in srgb, ${hue} 15%, var(--panel))` }}
+          title="Planned on the calendar"
+        >
+          {planned}
         </span>
       )}
       {rhythm && <span className="flex-none whitespace-nowrap rounded-md bg-grey-fill px-[7px] py-0.5 text-[11.5px] font-medium text-grey-ink">{rhythm}</span>}
@@ -122,9 +147,10 @@ interface SubProps {
   ticked: ReadonlySet<string>
   complete: (id: string) => void
   onMenu: RowProps['onMenu']
+  blocksByTask: Map<string, Block[]>
 }
 
-function Subgoal({ group, goalId, showOther, hue, open, onToggle, ticked, complete, onMenu }: SubProps) {
+function Subgoal({ group, goalId, showOther, hue, open, onToggle, ticked, complete, onMenu, blocksByTask }: SubProps) {
   const shown = open ? group.tasks : group.tasks.slice(0, LIMIT)
   const hidden = group.tasks.length - LIMIT
   return (
@@ -142,7 +168,7 @@ function Subgoal({ group, goalId, showOther, hue, open, onToggle, ticked, comple
         </div>
       )}
       {shown.map((t) => (
-        <TaskRow key={t.id} task={t} hue={hue} complete={complete} locked={ticked.has(t.id)} onMenu={onMenu} />
+        <TaskRow key={t.id} task={t} hue={hue} complete={complete} locked={ticked.has(t.id)} onMenu={onMenu} plan={blocksByTask.get(t.id) ?? []} />
       ))}
       {hidden > 0 && (
         <button type="button" onClick={onToggle} className="w-full rounded-[10px] border-0 bg-transparent px-1.5 py-1 text-left text-[12.5px] text-muted hover:bg-soft">
@@ -163,14 +189,19 @@ function withDropZones(name: string, groups: Group[], dragging: boolean): Group[
   return zones
 }
 
-export function GoalsPanel({ projects, tasks, status, error, stale, ticked, complete, add, move, setDeadline }: Props) {
+export function GoalsPanel({ projects, tasks, status, error, stale, ticked, complete, add, move, setDeadline, blocks, dragging }: Props) {
   const byId = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects])
   const goals = buildGoals(projects, tasks)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => load('cockpit-ui', {}))
   const [dialogGoal, setDialogGoal] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ task: Task; anchor: DOMRect } | null>(null)
 
-  const dragging = useTaskDrag(move)
+  const blocksByTask = useMemo(() => {
+    const m = new Map<string, Block[]>()
+    for (const b of blocks) m.set(b.taskId, [...(m.get(b.taskId) ?? []), b])
+    return m
+  }, [blocks])
+  const dragTask = dragging?.kind === 'task'
 
   const allGoals: GoalOption[] = useMemo(
     () =>
@@ -228,8 +259,8 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
       <div data-goals-scroll className="min-h-0 flex-1 overflow-auto px-2.5 pb-4">
         {goals.map(({ project, name, tasks: gt, groups }) => {
           const hue = hueOf(project.id, byId)
-          const closed = Boolean(collapsed[project.id]) && !dragging
-          const shownGroups = withDropZones(project.inbox ? '' : project.name, groups, dragging !== null)
+          const closed = Boolean(collapsed[project.id]) && !dragTask
+          const shownGroups = withDropZones(project.inbox ? '' : project.name, groups, dragTask)
           return (
             <div key={project.id} className="mb-1.5" data-goal={name}>
               <button
@@ -265,6 +296,7 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
                       ticked={ticked}
                       complete={complete}
                       onMenu={(task, anchor) => setMenu({ task, anchor })}
+                      blocksByTask={blocksByTask}
                     />
                   ))}
                   <div className="ml-3.5 pl-2.5">

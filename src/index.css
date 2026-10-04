@@ -110,6 +110,24 @@
   font-weight: 500;
   transform: rotate(-1.5deg);
 }
+body.resizing-on,
+body.resizing-on * {
+  cursor: ns-resize !important;
+  user-select: none !important;
+}
+.ghost {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  z-index: 5;
+  pointer-events: none;
+  border: 1.5px dashed var(--ink2);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink2);
+  font-size: 12px;
+  padding: 6px 9px;
+}
 body.dragging-on,
 body.dragging-on * {
   cursor: grabbing !important;
