@@ -20,6 +20,7 @@ interface RawTask {
   checked?: boolean
   is_completed?: boolean
   due?: { date?: string; is_recurring?: boolean } | null
+  deadline?: { date?: string } | null
   duration?: { amount?: number; unit?: string } | null
 }
 
@@ -59,6 +60,7 @@ export function toTask(r: RawTask): Task {
     labels: r.labels ?? [],
     recurring: Boolean(r.due?.is_recurring),
     due: parseDue(r.due?.date),
+    deadline: r.deadline?.date ? r.deadline.date.slice(0, 10) : null,
     durationMin: minutes,
     checked: Boolean(r.checked ?? r.is_completed),
   }
@@ -123,7 +125,7 @@ export const todoistSource: TaskSource = {
       ...(input.projectId ? { projectId: input.projectId } : {}),
       ...(input.label ? { labels: [input.label] } : {}),
       ...(input.durationMin ? { durationMin: input.durationMin } : {}),
-      ...(input.due ? { due: input.due } : {}),
+      ...(input.deadline ? { deadline: input.deadline } : {}),
     })
     return toTask(raw)
   },
@@ -136,11 +138,11 @@ export const todoistSource: TaskSource = {
   async setLabels(id, labels) {
     await call({ action: 'setLabels', id, labels })
   },
-  async setDeadline(id, due) {
-    await call({ action: 'setDeadline', id, due })
+  async setDeadline(id, date) {
+    await call({ action: 'setDeadline', id, date })
   },
-  async setDuration(id, minutes) {
-    await call({ action: 'setDuration', id, minutes })
+  async setPlan(id, plan) {
+    await call({ action: 'setPlan', id, plan })
   },
   async listProjects() {
     const raw = await fetchAll<RawProject>('projects')

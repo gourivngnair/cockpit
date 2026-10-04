@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { addDays, dayName, parseDay, shortTime, todayStr } from '../lib/dates'
-import { goalRank, hueOf, type Due, type Project, type Task } from '../tasks'
+import { goalRank, hueOf, type Project, type Task } from '../tasks'
 import { SUBGOAL_ORDER, buildGoals, canTick, prettyLabel, type Group } from '../tasks/rules'
 import type { NewTask } from '../tasks/types'
 import type { Block } from '../blocks/useBlocks'
@@ -20,7 +20,7 @@ interface Props {
   complete: (id: string) => void
   add: (task: NewTask) => Promise<boolean>
   move: (id: string, target: MoveTarget) => void
-  setDeadline: (id: string, due: Due | null) => Promise<boolean>
+  setDeadline: (id: string, date: string | null) => Promise<boolean>
   blocks: Block[]
   dragging: Dragging
 }
@@ -75,8 +75,9 @@ function TaskRow({ task, hue, complete, locked, onMenu, plan }: RowProps) {
   const d = task.due
   const repeating = task.recurring
   const disabled = locked || !canTick(task, today)
-  const overdue = !repeating && d && d.date < today
-  const deadline = !repeating && d ? (overdue ? 'Overdue' : `Due ${relDay(d.date) || 'today '}${d.time ? shortTime(d.time) : ''}`.trim()) : null
+  // The real deadline is Todoist's Deadline field (a date). The due time is the planned work time, shown as the plan chip.
+  const dl = task.deadline
+  const deadline = !repeating && dl ? (dl < today ? 'Overdue' : `Due ${relDay(dl) || 'today'}`.trim()) : null
   const rhythm = repeating && d?.time ? `${shortTime(d.time)} daily` : null
 
   return (

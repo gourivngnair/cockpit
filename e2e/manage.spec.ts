@@ -33,7 +33,6 @@ test.describe('New task card', () => {
     await d.getByRole('button', { name: 'Assignments' }).click()
     await d.getByRole('button', { name: '1h 30m' }).click()
     await d.getByRole('button', { name: 'Tomorrow' }).click()
-    await d.getByLabel('Deadline time').fill('17:00')
     await d.getByRole('button', { name: 'Add task' }).click()
 
     await expect.poll(() => be.todoistWrites.length).toBe(1)
@@ -43,10 +42,10 @@ test.describe('New task card', () => {
       projectId: 'gpa',
       labels: ['assignments'],
       durationMin: 90,
-      due: { date: addDays(today, 1), time: '17:00' },
+      deadline: addDays(today, 1), // a date in the Deadline field, never a due date
     })
     const row = page.locator('[data-task]', { hasText: 'Write FM1 report' })
-    await expect(row).toContainText('Due Tmrw 5p')
+    await expect(row).toContainText('Due Tmrw')
     await expect(page.locator('[data-goal="Term 2 GPA"]')).toContainText('Assignments')
   })
 
@@ -159,27 +158,26 @@ test.describe('Moving tasks', () => {
 
 test.describe('Deadlines', () => {
   test('editing a deadline on a normal task sends the new date and shows the chip', async ({ page }) => {
-    const be = await openSignedIn(page, { projects, tasks: [task('Essay', 'gpa', { labels: ['assignments'], due: { date: addDays(today, 5) } })] })
+    const be = await openSignedIn(page, { projects, tasks: [task('Essay', 'gpa', { labels: ['assignments'], deadline: { date: addDays(today, 5) } })] })
     await page.getByRole('button', { name: 'Options for Essay' }).click()
     await page.getByRole('menuitem', { name: 'Deadline…' }).click()
     await page.getByLabel('Deadline date').fill(addDays(today, 1))
-    await page.getByLabel('Deadline time').fill('09:30')
     await page.getByRole('button', { name: 'Save' }).click()
-    await expect(page.locator('[data-task="Essay"]')).toContainText('Due Tmrw 9:30a')
-    expect(be.todoistWrites).toEqual([{ action: 'setDeadline', id: 'Essay', due: { date: addDays(today, 1), time: '09:30' } }])
+    await expect(page.locator('[data-task="Essay"]')).toContainText('Due Tmrw')
+    expect(be.todoistWrites).toEqual([{ action: 'setDeadline', id: 'Essay', date: addDays(today, 1) }])
   })
 
   test('clearing a deadline removes the chip', async ({ page }) => {
-    const be = await openSignedIn(page, { projects, tasks: [task('Essay', 'gpa', { due: { date: addDays(today, 5) } })] })
+    const be = await openSignedIn(page, { projects, tasks: [task('Essay', 'gpa', { deadline: { date: addDays(today, 5) } })] })
     await page.getByRole('button', { name: 'Options for Essay' }).click()
     await page.getByRole('menuitem', { name: 'Deadline…' }).click()
     await page.getByRole('button', { name: 'Clear' }).click()
     await expect(page.locator('[data-task="Essay"] [title="Deadline"]')).toHaveCount(0)
-    expect(be.todoistWrites).toEqual([{ action: 'setDeadline', id: 'Essay', due: null }])
+    expect(be.todoistWrites).toEqual([{ action: 'setDeadline', id: 'Essay', date: null }])
   })
 
   test('a failed deadline edit rolls back', async ({ page }) => {
-    const be = await openSignedIn(page, { projects, tasks: [task('Essay', 'gpa', { due: { date: addDays(today, 5) } })] })
+    const be = await openSignedIn(page, { projects, tasks: [task('Essay', 'gpa', { deadline: { date: addDays(today, 5) } })] })
     be.failTodoistWrites = true
     await page.getByRole('button', { name: 'Options for Essay' }).click()
     await page.getByRole('menuitem', { name: 'Deadline…' }).click()

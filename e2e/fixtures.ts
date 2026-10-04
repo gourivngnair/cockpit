@@ -30,6 +30,7 @@ export interface FakeTask {
   project_id: string
   labels?: string[]
   due?: { date: string; is_recurring?: boolean } | null
+  deadline?: { date: string } | null
   duration?: { amount: number; unit: string } | null
 }
 
@@ -125,8 +126,9 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
       projectId?: string
       labels?: string[]
       durationMin?: number
-      due?: { date: string; time?: string | null } | null
-      minutes?: number
+      deadline?: string | null
+      date?: string | null
+      plan?: { date: string; time: string; minutes?: number } | null
       id?: string
     }
 
@@ -141,7 +143,8 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
             content: body.content ?? '',
             project_id: body.projectId ?? 'inbox',
             labels: body.labels ?? [],
-            due: body.due ? { date: body.due.date + (body.due.time ? `T${body.due.time}:00` : '') } : null,
+            due: null, // a new task never gets a due date, only a Deadline
+            deadline: body.deadline ? { date: body.deadline } : null,
             duration: body.durationMin ? { amount: body.durationMin, unit: 'minute' } : null,
           }
           backend.tasks.push(created)
@@ -163,13 +166,17 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
           if (t) t.labels = body.labels
           return json(route, { ok: true })
         case 'setDeadline':
-        case 'setDuration':
+        case 'setPlan':
           // Same rule as the real function: a repeating task is never touched.
           if (t?.due?.is_recurring) return json(route, { error: 'This task repeats in Todoist, so Cockpit will not change it.' }, 409)
-          if (t && body.action === 'setDeadline') {
-            t.due = body.due ? { date: body.due.date + (body.due.time ? `T${body.due.time}:00` : '') } : null
+          if (t && body.action === 'setDeadline') t.deadline = body.date ? { date: body.date } : null
+          if (t && body.action === 'setPlan') {
+            if (body.plan === null) t.due = null
+            else if (body.plan) {
+              t.due = { date: `${body.plan.date}T${body.plan.time}:00` }
+              if (body.plan.minutes) t.duration = { amount: body.plan.minutes, unit: 'minute' }
+            }
           }
-          if (t && body.action === 'setDuration') t.duration = { amount: body.minutes!, unit: 'minute' }
           return json(route, { ok: true })
       }
     }

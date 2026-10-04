@@ -80,13 +80,32 @@ function itemsFor(day: string, d: Data): Item[] {
   return out.filter((i) => i.s >= START * 60 && i.s < END * 60)
 }
 
-function deadlinesFor(day: string, tasks: Task[]) {
-  return tasks
-    .filter((t) => !t.recurring && t.due?.date === day && t.due.time)
-    .map((t) => ({ id: t.id, title: t.content, min: toMin(t.due!.time!), time: t.due!.time! }))
-    .filter((d) => d.min >= START * 60 && d.min < END * 60)
+/** Tasks whose real deadline (Todoist's date-only Deadline field) falls on this day. */
+function deadlinesOn(day: string, tasks: Task[]): Task[] {
+  return tasks.filter((t) => !t.recurring && t.deadline === day)
 }
 
+/** All-day deadline chips for a day. Deadlines are dates, so they sit above the hours, not on them. */
+function DeadlineChips({ items, compact }: { items: Task[]; compact: boolean }) {
+  if (items.length === 0) return null
+  const shown = compact ? items.slice(0, 2) : items
+  return (
+    <div className={`flex flex-wrap justify-center gap-1 ${compact ? 'mt-1' : ''}`} data-deadlines>
+      {shown.map((t) => (
+        <span
+          key={t.id}
+          data-deadline={t.id}
+          title={`Deadline: ${t.content}`}
+          className="max-w-full truncate rounded-md px-[7px] py-0.5 text-[11px] font-medium text-accent"
+          style={{ background: 'color-mix(in srgb, var(--red) 12%, var(--panel))' }}
+        >
+          {compact ? 'Due' : `Due: ${t.content}`}
+          {compact && items.length > 1 && t === shown[shown.length - 1] && items.length > shown.length ? ` +${items.length - shown.length}` : ''}
+        </span>
+      ))}
+    </div>
+  )
+}
 function useMinuteClock() {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -107,7 +126,6 @@ interface LaneProps {
 function Lane({ day, compact, data, now, onBlock }: LaneProps) {
   const hours = END - START
   const placed = layout(itemsFor(day, data))
-  const deadlines = deadlinesFor(day, data.tasks)
   const nowMin = now.getHours() * 60 + now.getMinutes()
   const showNow = day === todayStr() && nowMin >= START * 60 && nowMin < END * 60
   const top = (m: number) => ((m - START * 60) / 60) * HOUR_PX
@@ -164,13 +182,6 @@ function Lane({ day, compact, data, now, onBlock }: LaneProps) {
           </div>
         )
       })}
-      {deadlines.map((d) => (
-        <div key={d.id} className="pointer-events-none absolute inset-x-0 z-2 border-t" style={{ top: top(d.min), borderTopColor: 'color-mix(in srgb, var(--red) 60%, transparent)' }} data-deadline={d.id}>
-          <span className="absolute -top-[9px] right-1.5 max-w-[90%] truncate bg-panel px-[5px] text-[11px] font-medium text-accent">
-            {compact ? 'Due' : `Due ${shortTime(d.time)}, ${d.title}`}
-          </span>
-        </div>
-      ))}
       {showNow && (
         <div className="pointer-events-none absolute -left-[5px] right-0 z-3 border-t-[1.5px] border-accent" style={{ top: top(nowMin) }} data-now>
           <i className="absolute -top-[5px] left-0 size-[9px] rounded-full bg-accent" />
@@ -296,6 +307,11 @@ export function Calendar({ events, tasks, completed, blocks, projects, onClasses
           ))}
         </div>
       </div>
+      {!week && deadlinesOn(day, tasks).length > 0 && (
+        <div className="border-b border-line px-3.5 py-2">
+          <DeadlineChips items={deadlinesOn(day, tasks)} compact={false} />
+        </div>
+      )}
       <div ref={scroller} className="min-h-0 flex-1 overflow-auto" data-calscroll>
         {week ? (
           <div className="grid pb-5 pr-3 pt-0" style={{ gridTemplateColumns: '52px repeat(7, minmax(90px, 1fr))', minWidth: 760 }}>
@@ -306,6 +322,7 @@ export function Calendar({ events, tasks, completed, blocks, projects, onClasses
                 <b className={`mx-auto mt-1 grid size-7 place-items-center rounded-full text-sm font-semibold ${d === today ? 'bg-accent text-white' : 'text-ink'}`}>
                   {parseDay(d).getDate()}
                 </b>
+                <DeadlineChips items={deadlinesOn(d, tasks)} compact />
               </div>
             ))}
             <div className="pt-2.5">

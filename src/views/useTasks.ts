@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { todayStr, addDays, dayName, parseDay } from '../lib/dates'
-import { taskSource, type Due, type Project, type Task } from '../tasks'
+import { samePlan } from '../blocks/plan'
+import { taskSource, type Project, type Task } from '../tasks'
 import { canTick, labelsWithSubgoal } from '../tasks/rules'
-import type { NewTask } from '../tasks/types'
+import type { NewTask, Plan } from '../tasks/types'
 import { dragLock } from '../ui/dragLock'
 import { useToast } from '../ui/toastContext'
 
@@ -151,7 +152,8 @@ export function useTasks() {
         projectId: input.projectId ?? projectsRef.current.find((p) => p.inbox)?.id ?? '',
         labels: input.label ? [input.label] : [],
         recurring: false,
-        due: input.due,
+        due: null,
+        deadline: input.deadline,
         durationMin: input.durationMin,
         checked: false,
       }
@@ -207,21 +209,22 @@ export function useTasks() {
     [load, patchTask, toast],
   )
 
+  /** Sets or clears a task's real deadline (Todoist's Deadline field, date only). */
   const setDeadline = useCallback(
-    async (id: string, due: Due | null) => {
+    async (id: string, date: string | null) => {
       const task = tasksRef.current.find((t) => t.id === id)
       if (!task || id.startsWith('tmp-')) return false
       if (task.recurring) {
         toast('This task repeats in Todoist, so Cockpit will not change its date.')
         return false
       }
-      const before = task.due
-      patchTask(id, { due })
+      const before = task.deadline
+      patchTask(id, { deadline: date })
       try {
-        await taskSource.setDeadline(id, due)
+        await taskSource.setDeadline(id, date)
         return true
       } catch (e) {
-        patchTask(id, { due: before })
+        patchTask(id, { deadline: before })
         toast(`Could not change the deadline${why(e)}. It is back as it was.`)
         return false
       }
@@ -229,24 +232,29 @@ export function useTasks() {
     [patchTask, toast],
   )
 
-  /** Sets a task's time needed in Todoist (used when a block is resized). Never for repeating tasks. */
-  const setDuration = useCallback(
-    async (id: string, minutes: number) => {
+  /**
+   * Mirrors a task's earliest upcoming block into Todoist as its planned time (due date and time,
+   * plus length), or clears it when no block is left. Never for repeating tasks.
+   */
+  const setPlan = useCallback(
+    async (id: string, plan: Plan | null) => {
       const task = tasksRef.current.find((t) => t.id === id)
-      if (!task || task.recurring || id.startsWith('tmp-') || task.durationMin === minutes) return true
-      const before = task.durationMin
-      patchTask(id, { durationMin: minutes })
+      if (!task || task.recurring || id.startsWith('tmp-')) return true
+      const current: Plan | null = task.due?.time ? { date: task.due.date, time: task.due.time, minutes: task.durationMin ?? 0 } : null
+      if (samePlan(current, plan)) return true
+      const before = { due: task.due, durationMin: task.durationMin }
+      patchTask(id, plan ? { due: { date: plan.date, time: plan.time }, durationMin: plan.minutes } : { due: null })
       try {
-        await taskSource.setDuration(id, minutes)
+        await taskSource.setPlan(id, plan)
         return true
       } catch (e) {
-        patchTask(id, { durationMin: before })
-        toast(`The block was saved, but Todoist's time needed was not updated${why(e)}.`)
+        patchTask(id, before)
+        toast(`The block was saved, but Todoist's planned time was not updated${why(e)}.`)
         return false
       }
     },
     [patchTask, toast],
   )
 
-  return { ...state, ticked, completed, reload: load, complete, add, move, setDeadline, setDuration }
+  return { ...state, ticked, completed, reload: load, complete, add, move, setDeadline, setPlan }
 }

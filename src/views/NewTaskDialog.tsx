@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { addDays, fmtDur, mondayOf, todayStr } from '../lib/dates'
 import type { Project } from '../tasks'
 import { SUBGOAL_ORDER, prettyLabel } from '../tasks/rules'
-import type { Due, NewTask } from '../tasks/types'
+import type { NewTask } from '../tasks/types'
 
 export interface GoalOption {
   project: Project
@@ -28,7 +28,6 @@ export function NewTaskDialog({ goals, initialGoalId, onSubmit, onClose }: Props
   const [minutes, setMinutes] = useState<number | null>(null)
   const [custom, setCustom] = useState('')
   const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
   const [busy, setBusy] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
 
@@ -56,13 +55,12 @@ export function NewTaskDialog({ goals, initialGoalId, onSubmit, onClose }: Props
     e.preventDefault()
     if (!name.trim() || !goal) return
     setBusy(true)
-    const due: Due | null = date ? { date, time: time || null } : null
     const ok = await onSubmit({
       content: name,
       projectId: goal.project.inbox ? null : goal.project.id,
       label: subgoal,
       durationMin: minutes,
-      due,
+      deadline: date || null,
     })
     setBusy(false)
     if (ok) onClose()
@@ -168,17 +166,8 @@ export function NewTaskDialog({ goals, initialGoalId, onSubmit, onClose }: Props
                 </button>
               ))}
             </div>
-            <div className="flex gap-2">
-              <input type="date" aria-label="Deadline date" value={date} onChange={(e) => setDate(e.target.value)} className="min-w-0 flex-1 rounded-[10px] border border-line bg-soft px-3 py-2" />
-              <input
-                type="time"
-                aria-label="Deadline time"
-                value={time}
-                disabled={!date}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-32 rounded-[10px] border border-line bg-soft px-3 py-2 disabled:opacity-40"
-              />
-            </div>
+            <input type="date" aria-label="Deadline date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-[10px] border border-line bg-soft px-3 py-2" />
+            <p className="m-0 mt-1.5 text-xs text-muted">A deadline is a date. Drag the task onto the calendar to plan when you will work on it.</p>
           </fieldset>
         </div>
 

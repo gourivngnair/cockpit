@@ -3,16 +3,17 @@
 //
 // Allowed requests (anything else is refused):
 //   { path: 'projects' | 'tasks' | 'labels', params }          GET (read)
-//   { action: 'create', content, projectId?, labels?, durationMin?, due? }
+//   { action: 'create', content, projectId?, labels?, durationMin?, deadline? }
 //   { action: 'close', id }
 //   { action: 'move', id, projectId }                          change goal (project)
 //   { action: 'setLabels', id, labels }                        change subgoal (label)
-//   { action: 'setDeadline', id, due: {date,time?} | null }    refused for repeating tasks
-//   { action: 'setDuration', id, minutes }                     refused for repeating tasks
+//   { action: 'setDeadline', id, date: 'YYYY-MM-DD' | null }   the Deadline field; refused for repeating tasks
+//   { action: 'setPlan', id, plan: {date,time,minutes} | null } the planned work time (due date and time);
+//                                                              refused for repeating tasks
 // A repeating task's date is never written (CLAUDE.md invariant 1): the function looks the
 // task up in Todoist and refuses, so this does not rely on the browser behaving.
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { buildCreate, dueFields, ID, isRepeating, normalizeReply, validLabels, validMinutes } from './body.ts'
+import { buildCreate, ID, isRepeating, normalizeReply, planFields, validDate, validLabels } from './body.ts'
 
 const BASE = 'https://api.todoist.com/api/v1'
 const READABLE = new Set(['projects', 'tasks', 'labels'])
@@ -37,8 +38,9 @@ type Body = {
   projectId?: unknown
   labels?: unknown
   durationMin?: unknown
-  due?: unknown
-  minutes?: unknown
+  deadline?: unknown
+  date?: unknown
+  plan?: unknown
   id?: string
 }
 
@@ -92,21 +94,24 @@ Deno.serve(async (req) => {
       return passThrough(await post(`tasks/${id}`, { labels }))
     }
 
-    if (body.action === 'setDeadline' || body.action === 'setDuration') {
+    if (body.action === 'setDeadline' || body.action === 'setPlan') {
       // Look the task up first: never touch a repeating task.
       const found = await fetch(`${BASE}/tasks/${id}`, { headers: auth })
       if (!found.ok) return json({ error: 'Task not found.' }, found.status)
       if (isRepeating(await found.json())) return json({ error: 'This task repeats in Todoist, so Cockpit will not change it.' }, 409)
 
-      if (body.action === 'setDuration') {
-        const m = validMinutes(body.minutes)
-        if (!m) return json({ error: 'Bad time needed.' }, 400)
-        return passThrough(await post(`tasks/${id}`, { duration: m, duration_unit: 'minute' }))
+      if (body.action === 'setDeadline') {
+        if (body.date === null) return passThrough(await post(`tasks/${id}`, { deadline_date: null }))
+        const d = validDate(body.date)
+        if (!d) return json({ error: 'Bad deadline.' }, 400)
+        return passThrough(await post(`tasks/${id}`, { deadline_date: d }))
       }
-      if (body.due === null) return passThrough(await post(`tasks/${id}`, { due_string: 'no date' }))
-      const f = dueFields(body.due as { date: string; time?: string | null })
-      if (!f) return json({ error: 'Bad deadline.' }, 400)
-      return passThrough(await post(`tasks/${id}`, f))
+
+      // setPlan: null clears the planned time (the Deadline field is left alone).
+      if (body.plan === null) return passThrough(await post(`tasks/${id}`, { due_string: 'no date' }))
+      const fields = planFields(body.plan as { date: string; time: string; minutes?: number })
+      if (!fields) return json({ error: 'Bad planned time.' }, 400)
+      return passThrough(await post(`tasks/${id}`, fields))
     }
 
     return json({ error: 'Not allowed.' }, 400)

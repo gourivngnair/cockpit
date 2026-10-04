@@ -48,9 +48,9 @@ test('shows five tasks per subgoal with Show more and Show fewer', async ({ page
   await expect(page.locator('[data-task]')).toHaveCount(5)
 })
 
-test('deadline chip is red text on a task with a due date', async ({ page }) => {
-  await openSignedIn(page, { projects, tasks: [task('Essay', 'gpa', { due: { date: addDays(today, 2) + 'T17:00:00' } })] })
-  await expect(page.locator('[data-task="Essay"]')).toContainText(/Due .*5p/)
+test('deadline chip is red text on a task with a deadline', async ({ page }) => {
+  await openSignedIn(page, { projects, tasks: [task('Essay', 'gpa', { deadline: { date: addDays(today, 2) } })] })
+  await expect(page.locator('[data-task="Essay"]')).toContainText(/Due /)
   await expect(page.locator('[data-task="Essay"] [title="Deadline"]')).toBeVisible()
 })
 

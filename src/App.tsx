@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { Login } from './auth/Login'
-import { useBlocks } from './blocks/useBlocks'
+import { earliestPlan } from './blocks/plan'
+import { useBlocks, type Block } from './blocks/useBlocks'
 import { Calendar } from './calendar/Calendar'
 import { END, STEP } from './calendar/time'
 import { useDnd } from './dnd/useDnd'
@@ -29,12 +30,24 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
   /** Keeps a block inside the day: it can be at most as long as the time left until midnight. */
   const fit = (start: number, minutes: number) => Math.max(STEP, Math.min(minutes, END * 60 - start))
 
+  /**
+   * After a block is saved, mirror the task's earliest upcoming block into Todoist as its planned
+   * time (due date and time, plus length). No block left clears it. Repeating tasks are never touched.
+   */
+  const syncPlan = (taskId: string, blocks: Block[]) => void t.setPlan(taskId, earliestPlan(blocks, taskId, new Date()))
+
+  const changeBlock = async (next: Block) => {
+    if (await bl.update(next)) syncPlan(next.taskId, bl.blocks.map((b) => (b.id === next.id ? next : b)))
+  }
+
   const resizeBlock = async (id: string, minutes: number) => {
     const block = bl.blocks.find((b) => b.id === id)
-    if (!block) return
-    const m = fit(toMin(block.start), minutes)
-    // The block is saved first; the task's time needed in Todoist follows so it reads the same everywhere.
-    if (await bl.update({ ...block, minutes: m })) await t.setDuration(block.taskId, m)
+    if (block) await changeBlock({ ...block, minutes: fit(toMin(block.start), minutes) })
+  }
+
+  const removeBlock = async (id: string) => {
+    const block = bl.blocks.find((b) => b.id === id)
+    if (block && (await bl.remove(id))) syncPlan(block.taskId, bl.blocks.filter((b) => b.id !== id))
   }
 
   const dnd = useDnd({
@@ -43,16 +56,17 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
       const task = t.tasks.find((x) => x.id === taskId)
       if (!task) return
       const minutes = fit(start, task.durationMin ?? DEFAULT_MINUTES)
-      void bl.create({ taskId, date, start: toHM(start), minutes })
+      void bl.create({ taskId, date, start: toHM(start), minutes }).then((block) => {
+        if (block) syncPlan(taskId, [...bl.blocks, block])
+      })
     },
     moveBlock: (id, date, start) => {
       const block = bl.blocks.find((b) => b.id === id)
-      if (block) void bl.update({ ...block, date, start: toHM(start), minutes: fit(start, block.minutes) })
+      if (block) void changeBlock({ ...block, date, start: toHM(start), minutes: fit(start, block.minutes) })
     },
     resizeBlock: (id, minutes) => void resizeBlock(id, minutes),
     refuse: toast,
   })
-
   return (
     <Shell onRefresh={t.reload} onSignOut={onSignOut}>
       {/* Week view needs the width, so the vision panel steps aside (as in v2). */}
@@ -69,7 +83,7 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
           onClasses={() => setClassesOpen(true)}
           onLength={(id, m) => void resizeBlock(id, m)}
           onDone={(taskId) => void t.complete(taskId)}
-          onRemove={(id) => void bl.remove(id)}
+          onRemove={(id) => void removeBlock(id)}
           mode={mode}
           onMode={setMode}
         />

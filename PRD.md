@@ -90,6 +90,15 @@ One card per goal: hard-course reviews vs weeks elapsed, assignments on time, ma
 - Project lives at `C:\Users\gouri\dev\cockpit` (not OneDrive), backed up on GitHub.
 - Todoist projects and labels match the goals table above exactly.
 
+## Decisions (2026-10-04, planned time in Todoist)
+Supersedes "the Todoist due date and time is the deadline" (Constraints, Phase 1 "Deadlines") and lesson 6.
+- A task's real deadline is Todoist's **Deadline** field (Pro). It is a date only, so Cockpit shows deadlines as all-day red chips (on the task, and above the hours on the calendar), not as a line at a time.
+- A task's Todoist **due date and time is the planned work time**, mirrored from Cockpit's **earliest upcoming block** (one that has not finished), with the block's length as the duration. When no upcoming block is left, the due date is cleared. Tasks with no deadline are fine.
+- Repeating tasks keep their schedule untouched; nothing in Cockpit writes their dates.
+- The New task card and the deadline editor set the Deadline field (date only). The time-of-day deadline input is gone.
+- One-time migration (needs explicit approval): for each existing non-repeating task whose due date was really a deadline, copy that date into the Deadline field and clear the due date. At the time of writing that is 5 tasks, all all-day dates, so no time-of-day is lost.
+- Deadline alerts (Phase 1 step 4) are date-only: the reminder time is decided when notifications are built.
+
 ## Future direction (not in current scope)
 Gouri expects to stop using Todoist at some point and create tasks and deadlines by telling Claude in a chat. To keep that possible, the app reads tasks only through a single task-source layer (`src/tasks/`), never from Todoist directly. Replacing Todoist later means swapping that layer for Cockpit's own tasks table, plus a way for Claude chat to create tasks. Do not build this until asked.
 

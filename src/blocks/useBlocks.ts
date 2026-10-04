@@ -95,7 +95,9 @@ export function useBlocks() {
       if (error) {
         setBlocks(before)
         toast('Could not remove that block.')
+        return false
       }
+      return true
     },
     [toast],
   )

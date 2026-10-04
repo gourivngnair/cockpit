@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Due, Task } from '../tasks'
+import type { Task } from '../tasks'
 import { SUBGOAL_ORDER, prettyLabel, subgoalOf } from '../tasks/rules'
 import type { MoveTarget } from './useTasks'
 
@@ -14,7 +14,7 @@ interface Props {
   currentGoalId: string
   anchor: DOMRect
   onMove: (target: MoveTarget) => void
-  onDeadline: (due: Due | null) => Promise<boolean>
+  onDeadline: (date: string | null) => Promise<boolean>
   onClose: () => void
 }
 
@@ -22,8 +22,7 @@ const W = 280
 
 export function TaskMenu({ task, goals, currentGoalId, anchor, onMove, onDeadline, onClose }: Props) {
   const [mode, setMode] = useState<'menu' | 'move' | 'deadline'>('menu')
-  const [date, setDate] = useState(task.due?.date ?? '')
-  const [time, setTime] = useState(task.due?.time ?? '')
+  const [date, setDate] = useState(task.deadline ?? '')
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -115,17 +114,16 @@ export function TaskMenu({ task, goals, currentGoalId, anchor, onMove, onDeadlin
           onSubmit={async (e) => {
             e.preventDefault()
             if (!date) return
-            if (await onDeadline({ date, time: time || null })) onClose()
+            if (await onDeadline(date)) onClose()
           }}
         >
           <p className="m-0 mb-2 text-[13px] font-semibold">Deadline</p>
-          <input type="date" aria-label="Deadline date" value={date} onChange={(e) => setDate(e.target.value)} className="mb-2 w-full rounded-lg border border-line bg-soft px-2.5 py-1.5" />
-          <input type="time" aria-label="Deadline time" value={time} disabled={!date} onChange={(e) => setTime(e.target.value)} className="mb-3 w-full rounded-lg border border-line bg-soft px-2.5 py-1.5 disabled:opacity-40" />
+          <input type="date" aria-label="Deadline date" value={date} onChange={(e) => setDate(e.target.value)} className="mb-3 w-full rounded-lg border border-line bg-soft px-2.5 py-1.5" />
           <div className="flex gap-2">
             <button type="submit" disabled={!date} className="rounded-lg bg-ink px-3.5 py-1.5 text-[13px] font-semibold text-panel disabled:opacity-40">
               Save
             </button>
-            {task.due && (
+            {task.deadline && (
               <button
                 type="button"
                 onClick={async () => {

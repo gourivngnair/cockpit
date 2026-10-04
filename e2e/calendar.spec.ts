@@ -7,10 +7,10 @@ const tomorrow = ymd(new Date(Date.now() + 864e5))
 const klass: FakeEvent = { id: 'e-a', title: 'Strategy', date: today, start_time: '10:00:00', end_time: '11:30:00', room: 'B12', kind: 'class' }
 const tasks: FakeTask[] = [
   { id: 't1', content: 'Morning routine', project_id: 'p1', due: { date: today + 'T08:00:00', is_recurring: true } },
-  { id: 't2', content: 'Submit essay', project_id: 'p1', due: { date: today + 'T20:00:00', is_recurring: false } },
+  { id: 't2', content: 'Submit essay', project_id: 'p1', due: null, deadline: { date: today } },
 ]
 
-test('calendar shows classes and repeating tasks as grey dashed blocks, deadlines as a red line', async ({ page }) => {
+test('calendar shows classes and repeating tasks as grey dashed blocks, deadlines as all-day chips', async ({ page }) => {
   await openSignedIn(page, { tasks, events: [klass] })
   await expect(page.getByRole('heading', { name: 'Goals' })).toBeVisible()
 
@@ -20,7 +20,8 @@ test('calendar shows classes and repeating tasks as grey dashed blocks, deadline
   await expect(cls).toHaveCSS('border-top-style', 'dashed')
 
   await expect(page.locator('[data-kind="rt"]', { hasText: 'Morning routine' })).toHaveCSS('border-top-style', 'dashed')
-  await expect(page.locator('[data-deadline="t2"]')).toContainText('Due 8p, Submit essay')
+  await expect(page.locator('[data-deadline="t2"]')).toContainText('Due: Submit essay')
+  await expect(page.locator('[data-deadline="t2"]')).toHaveCSS('color', 'rgb(240, 68, 58)')
 })
 
 test('one-off events are solid blue, classes stay grey dashed', async ({ page }) => {

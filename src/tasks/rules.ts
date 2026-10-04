@@ -43,7 +43,9 @@ export interface Goal {
   groups: Group[]
 }
 
-const dueKey = (t: Task) => (t.due ? `${t.due.date}T${t.due.time ?? '99:99'}` : '9999')
+/** Sort key: real deadline first; a repeating task by its schedule; everything else last. */
+const dueKey = (t: Task) =>
+  t.deadline ? `${t.deadline}T00:00` : t.recurring && t.due ? `${t.due.date}T${t.due.time ?? '99:99'}` : '9999'
 
 /** Goal, then subgoal (label), then tasks. Sub-projects roll up into their top-level goal. */
 export function buildGoals(projects: Project[], tasks: Task[]): Goal[] {

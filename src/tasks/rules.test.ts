@@ -18,6 +18,7 @@ const task = (id: string, projectId: string, over: Partial<Task> = {}): Task => 
   labels: [],
   recurring: false,
   due: null,
+  deadline: null,
   durationMin: null,
   checked: false,
   ...over,
@@ -68,12 +69,12 @@ describe('buildGoals', () => {
     expect(goals[0].groups.map((g) => g.label)).toEqual(['hard-courses', 'end-terms', 'assignments', null])
   })
 
-  it('sorts tasks by due date, undated last, keeping Todoist order for ties', () => {
+  it('sorts tasks by deadline, undated last, keeping Todoist order for ties', () => {
     const goals = buildGoals(projects, [
       task('none', 'gpa'),
-      task('late', 'gpa', { due: { date: '2026-10-09', time: null } }),
-      task('soon', 'gpa', { due: { date: '2026-10-06', time: '09:00' } }),
-      task('soon2', 'gpa', { due: { date: '2026-10-06', time: '09:00' } }),
+      task('late', 'gpa', { deadline: '2026-10-09' }),
+      task('soon', 'gpa', { deadline: '2026-10-06' }),
+      task('soon2', 'gpa', { deadline: '2026-10-06' }),
     ])
     expect(goals[0].tasks.map((t) => t.id)).toEqual(['soon', 'soon2', 'late', 'none'])
   })

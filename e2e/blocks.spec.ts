@@ -16,6 +16,8 @@ const START = 7
 test.use({ viewport: { width: 1440, height: 1000 } })
 
 async function open(page: Page, opts: Parameters<typeof openSignedIn>[1]) {
+  // Fixed morning start, so every block in these tests is later than now.
+  await page.clock.install({ time: new Date(`${today}T07:30:00`) })
   const be = await openSignedIn(page, { projects, ...opts })
   await page.locator('[data-calscroll]').waitFor()
   await page.evaluate(() => ((document.querySelector('[data-calscroll]') as HTMLElement).scrollTop = 0))
@@ -215,7 +217,7 @@ test.describe('resizing blocks', () => {
     await page.mouse.up()
   }
 
-  test('dragging the bottom edge saves the whole row and updates Todoist', async ({ page }) => {
+  test('dragging the bottom edge saves the whole row and updates Todoist planned length', async ({ page }) => {
     const be = await open(page, { tasks: [task('Write report', { duration: { amount: 30, unit: 'minute' } })], blocks: [block('b1', 'Write report', { minutes: 30 })] })
     await dragHandle(page, 'b1', 32) // 32px is 30 minutes
 
@@ -224,9 +226,9 @@ test.describe('resizing blocks', () => {
     expect(w.method).toBe('PATCH')
     expect(Object.keys(w.body!).sort()).toEqual(['date', 'minutes', 'start_time', 'task_id', 'updated_at'])
     expect(w.body).toMatchObject({ task_id: 'Write report', date: today, start_time: '09:00', minutes: 60 })
-    // The task's time needed follows, so it reads the same everywhere.
+    // Todoist's planned time and length follow, so it reads the same everywhere.
     await expect.poll(() => be.todoistWrites.length).toBe(1)
-    expect(be.todoistWrites[0]).toEqual({ action: 'setDuration', id: 'Write report', minutes: 60 })
+    expect(be.todoistWrites[0]).toEqual({ action: 'setPlan', id: 'Write report', plan: { date: today, time: '09:00', minutes: 60 } })
     await expect(page.locator('[data-block="b1"] [data-block-len]')).toHaveText('1h')
   })
 
@@ -264,7 +266,7 @@ test.describe('resizing blocks', () => {
 })
 
 test.describe('block card', () => {
-  test('length buttons change the block and the task length', async ({ page }) => {
+  test('length buttons change the block and the planned length', async ({ page }) => {
     const be = await open(page, { tasks: [task('Write report')], blocks: [block('b1', 'Write report')] })
     await page.locator('[data-block="b1"]').click({ position: { x: 20, y: 10 } })
     const card = page.getByRole('dialog', { name: 'Block for Write report' })
@@ -272,7 +274,7 @@ test.describe('block card', () => {
     await expect.poll(() => be.blockWrites.length).toBe(1)
     expect(be.blockWrites[0].body).toMatchObject({ minutes: 90, start_time: '09:00' })
     await expect.poll(() => be.todoistWrites.length).toBe(1)
-    expect(be.todoistWrites[0]).toMatchObject({ action: 'setDuration', minutes: 90 })
+    expect(be.todoistWrites[0]).toEqual({ action: 'setPlan', id: 'Write report', plan: { date: today, time: '09:00', minutes: 90 } })
   })
 
   test('Mark done completes the task and leaves a faded struck-through block', async ({ page }) => {
@@ -320,6 +322,7 @@ test('blocks from tasks completed elsewhere are not shown', async ({ page }) => 
 test('a touch long-press picks a task up and drops it on the calendar', async ({ browser }) => {
   const ctx = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 1280, height: 900 }, baseURL: 'http://localhost:4173' })
   const page = await ctx.newPage()
+  await page.clock.install({ time: new Date(`${today}T07:30:00`) })
   const be = await openSignedIn(page, { projects, tasks: [task('Touch task')] })
   await page.locator('[data-calscroll]').waitFor()
   await page.evaluate(() => ((document.querySelector('[data-calscroll]') as HTMLElement).scrollTop = 0))
@@ -343,4 +346,97 @@ test('a touch long-press picks a task up and drops it on the calendar', async ({
   await expect.poll(() => be.blockWrites.length).toBe(1)
   expect(be.blockWrites[0].body).toMatchObject({ task_id: 'Touch task', start_time: '10:00' })
   await ctx.close()
+})
+
+test.describe('planned time in Todoist (the earliest upcoming block)', () => {
+  const plan = (id: string, time: string, minutes: number, date = today) => ({ action: 'setPlan', id, plan: { date, time, minutes } })
+
+  test('placing a block sets the task planned time and length, never a deadline', async ({ page }) => {
+    const be = await open(page, { tasks: [task('Write report', { duration: { amount: 45, unit: 'minute' } })] })
+    await dragToSlot(page, page.locator('[data-task="Write report"]'), page.locator('[data-lane]').first(), 9)
+    await expect.poll(() => be.todoistWrites.length).toBe(1)
+    expect(be.todoistWrites[0]).toEqual(plan('Write report', '09:00', 45))
+    // Todoist now holds the plan as the due time. The Deadline field is untouched.
+    expect(be.tasks[0].due).toEqual({ date: `${today}T09:00:00` })
+    expect(be.tasks[0].deadline ?? null).toBeNull()
+  })
+
+  test('an existing deadline survives planning', async ({ page }) => {
+    const be = await open(page, { tasks: [task('Write report', { deadline: { date: addDays(today, 3) } })] })
+    await dragToSlot(page, page.locator('[data-task="Write report"]'), page.locator('[data-lane]').first(), 9)
+    await expect.poll(() => be.todoistWrites.length).toBe(1)
+    expect(be.tasks[0].deadline).toEqual({ date: addDays(today, 3) })
+    expect(be.todoistWrites.every((w) => w.action === 'setPlan')).toBe(true)
+  })
+
+  test('moving the earliest block updates the plan', async ({ page }) => {
+    const be = await open(page, { tasks: [task('Write report', { due: { date: `${today}T09:00:00` }, duration: { amount: 30, unit: 'minute' } })], blocks: [block('b1', 'Write report')] })
+    await dragToSlot(page, page.locator('[data-block="b1"]'), page.locator('[data-lane]').first(), 13, { grab: 10 })
+    await expect.poll(() => be.todoistWrites.length).toBe(1)
+    expect(be.todoistWrites[0]).toEqual(plan('Write report', '13:00', 30))
+  })
+
+  test('the earliest of several blocks is the plan', async ({ page }) => {
+    const be = await open(page, { tasks: [task('Big project')] })
+    const lane = page.locator('[data-lane]').first()
+    await dragToSlot(page, page.locator('[data-task="Big project"]'), lane, 14)
+    await expect.poll(() => be.todoistWrites.length).toBe(1)
+    expect(be.todoistWrites[0]).toEqual(plan('Big project', '14:00', 30))
+    await dragToSlot(page, page.locator('[data-task="Big project"]'), lane, 9)
+    await expect.poll(() => be.todoistWrites.length).toBe(2)
+    expect(be.todoistWrites[1]).toEqual(plan('Big project', '09:00', 30))
+  })
+
+  test('changing a later block does not touch Todoist', async ({ page }) => {
+    const be = await open(page, {
+      tasks: [task('Big project', { due: { date: `${today}T09:00:00` }, duration: { amount: 30, unit: 'minute' } })],
+      blocks: [block('b1', 'Big project'), block('b2', 'Big project', { start_time: '14:00:00' })],
+    })
+    await dragToSlot(page, page.locator('[data-block="b2"]'), page.locator('[data-lane]').first(), 16, { grab: 10 })
+    await expect.poll(() => be.blockWrites.length).toBe(1)
+    await page.waitForTimeout(300)
+    expect(be.todoistWrites).toHaveLength(0)
+  })
+
+  test('removing the last block clears the planned time and keeps the deadline', async ({ page }) => {
+    const be = await open(page, {
+      tasks: [task('Write report', { due: { date: `${today}T09:00:00` }, deadline: { date: addDays(today, 3) }, duration: { amount: 30, unit: 'minute' } })],
+      blocks: [block('b1', 'Write report')],
+    })
+    await page.locator('[data-block="b1"]').click({ position: { x: 20, y: 10 } })
+    await page.getByRole('dialog', { name: 'Block for Write report' }).getByRole('button', { name: 'Remove block' }).click()
+    await expect.poll(() => be.todoistWrites.length).toBe(1)
+    expect(be.todoistWrites[0]).toEqual({ action: 'setPlan', id: 'Write report', plan: null })
+    expect(be.tasks[0].due).toBeNull()
+    expect(be.tasks[0].deadline).toEqual({ date: addDays(today, 3) })
+  })
+
+  test('removing one of two blocks keeps the plan on the earliest', async ({ page }) => {
+    const be = await open(page, {
+      tasks: [task('Big project', { due: { date: `${today}T09:00:00` }, duration: { amount: 30, unit: 'minute' } })],
+      blocks: [block('b1', 'Big project'), block('b2', 'Big project', { start_time: '14:00:00' })],
+    })
+    await page.locator('[data-block="b2"]').click({ position: { x: 20, y: 10 } })
+    await page.getByRole('dialog', { name: 'Block for Big project' }).getByRole('button', { name: 'Remove block' }).click()
+    await expect(page.locator('[data-block="b2"]')).toHaveCount(0)
+    await page.waitForTimeout(300)
+    expect(be.todoistWrites).toHaveLength(0)
+  })
+
+  test('a failed Todoist update keeps the block and says so', async ({ page }) => {
+    const be = await open(page, { tasks: [task('Write report')] })
+    be.failTodoistWrites = true
+    await dragToSlot(page, page.locator('[data-task="Write report"]'), page.locator('[data-lane]').first(), 9)
+    await expect(page.getByRole('status')).toContainText("Todoist's planned time was not updated")
+    await expect(page.locator('[data-kind="block"]', { hasText: 'Write report' })).toBeVisible()
+  })
+
+  test('a failed block save sends nothing to Todoist', async ({ page }) => {
+    const be = await open(page, { tasks: [task('Write report')] })
+    be.failBlockWrites = true
+    await dragToSlot(page, page.locator('[data-task="Write report"]'), page.locator('[data-lane]').first(), 9)
+    await expect(page.getByRole('status')).toContainText('Could not save that block')
+    await page.waitForTimeout(300)
+    expect(be.todoistWrites).toHaveLength(0)
+  })
 })

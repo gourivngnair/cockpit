@@ -1,5 +1,9 @@
 /**
  * Pure helpers for the Todoist proxy (no Deno or network here, so they are unit-tested).
+ *
+ * Model (CLAUDE.md, decided 2026-10-04): a task's Todoist *Deadline* field (date only) is its
+ * real deadline. Its *due* date and time is the planned work time, mirrored from Cockpit's
+ * earliest upcoming block. A repeating task's due date is never written.
  */
 
 /**
@@ -16,17 +20,28 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 const LABEL = /^[^\s,]{1,60}$/
 
-export interface DueInput {
-  date: string // YYYY-MM-DD
-  time?: string | null // HH:MM, local
+export function validDate(v: unknown): string | null {
+  return typeof v === 'string' && DATE.test(v) && !Number.isNaN(Date.parse(v)) ? v : null
 }
 
-/** Fields Todoist understands for a due date. Floating local time: no timezone suffix. */
-export function dueFields(due: DueInput): { due_date: string } | { due_datetime: string } | null {
-  if (!due || typeof due.date !== 'string' || !DATE.test(due.date) || Number.isNaN(Date.parse(due.date))) return null
-  if (due.time == null || due.time === '') return { due_date: due.date }
-  if (!TIME.test(due.time)) return null
-  return { due_datetime: `${due.date}T${due.time}:00` }
+export interface PlanInput {
+  date: string // YYYY-MM-DD
+  time: string // HH:MM, local
+  minutes?: number
+}
+
+/** Body fields for a planned time: a floating local due_datetime plus the block length. */
+export function planFields(p: PlanInput): Record<string, unknown> | null {
+  const date = validDate(p?.date)
+  if (!date || typeof p.time !== 'string' || !TIME.test(p.time)) return null
+  const out: Record<string, unknown> = { due_datetime: `${date}T${p.time}:00` }
+  if (p.minutes !== undefined) {
+    const m = validMinutes(p.minutes)
+    if (!m) return null
+    out.duration = m
+    out.duration_unit = 'minute'
+  }
+  return out
 }
 
 export function validLabels(v: unknown): string[] | null {
@@ -44,10 +59,13 @@ export interface CreateInput {
   projectId?: unknown
   labels?: unknown
   durationMin?: unknown
-  due?: unknown
+  deadline?: unknown
 }
 
-/** Builds the POST /tasks body, or an error message. Only whitelisted fields are ever sent. */
+/**
+ * Builds the POST /tasks body, or an error message. Only whitelisted fields are ever sent.
+ * A new task never gets a due date here: its deadline goes in the Deadline field.
+ */
 export function buildCreate(i: CreateInput): { payload: Record<string, unknown> } | { error: string } {
   const content = typeof i.content === 'string' ? i.content.trim() : ''
   if (!content || content.length > 500) return { error: 'Bad task text.' }
@@ -67,15 +85,15 @@ export function buildCreate(i: CreateInput): { payload: Record<string, unknown> 
     payload.duration = m
     payload.duration_unit = 'minute'
   }
-  if (i.due !== undefined && i.due !== null) {
-    const f = dueFields(i.due as DueInput)
-    if (!f) return { error: 'Bad deadline.' }
-    Object.assign(payload, f)
+  if (i.deadline !== undefined && i.deadline !== null) {
+    const d = validDate(i.deadline)
+    if (!d) return { error: 'Bad deadline.' }
+    payload.deadline_date = d
   }
   return { payload }
 }
 
-/** True when Todoist reports the task as repeating, so deadline edits must be refused. */
+/** True when Todoist reports the task as repeating, so date writes must be refused. */
 export function isRepeating(task: unknown): boolean {
   const due = (task as { due?: { is_recurring?: boolean } | null } | null)?.due
   return Boolean(due?.is_recurring)
