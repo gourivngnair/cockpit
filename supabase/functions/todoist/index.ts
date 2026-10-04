@@ -21,8 +21,11 @@ const json = (body: unknown, status = 200) =>
 
 async function passThrough(res: Response) {
   const text = await res.text()
-  return new Response(text || null, {
-    status: res.status === 204 ? 200 : res.status,
+  // Todoist answers some writes (like close) with an empty body. Always return valid JSON,
+  // or the browser client treats the empty reply as an error.
+  if (!text.trim()) return json({ ok: res.ok }, res.ok ? 200 : res.status)
+  return new Response(text, {
+    status: res.status,
     headers: { ...cors, 'Content-Type': res.headers.get('Content-Type') ?? 'application/json' },
   })
 }

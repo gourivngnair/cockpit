@@ -93,7 +93,10 @@ async function fetchAll<T>(path: 'projects' | 'tasks'): Promise<T[]> {
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const res: { data: T | null; error: Error | null } = await supabase.functions.invoke('todoist', { body })
-  if (res.error) throw res.error
+  if (res.error) {
+    console.error('Todoist call failed', body.action ?? body.path, res.error)
+    throw res.error
+  }
   return res.data as T
 }
 
