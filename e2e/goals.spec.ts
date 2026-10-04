@@ -97,7 +97,7 @@ test('a repeating task is completed once and cannot be ticked twice (lesson 4)',
   expect(be.todoistWrites).toHaveLength(1)
 })
 
-test('adding a task puts it in the goal and never sends a due date (invariant 1)', async ({ page }) => {
+test('adding a task puts it in the goal; a typed date goes in the Deadline field, never a due date (invariant 1)', async ({ page }) => {
   const be = await openSignedIn(page, { projects, tasks: [task('Existing', 'gpa')] })
   const gpa = page.locator('[data-goal="Term 2 GPA"]')
   await gpa.getByRole('button', { name: 'Add task' }).click()
@@ -106,8 +106,9 @@ test('adding a task puts it in the goal and never sends a due date (invariant 1)
   await dialog.getByRole('button', { name: 'Add task' }).click()
   await expect(gpa.locator('[data-task]', { hasText: 'Email professor' })).toBeVisible()
   await expect.poll(() => be.todoistWrites.length).toBe(1)
-  // The words in the title are plain text. No due date, label or duration was chosen, so none is sent.
-  expect(be.todoistWrites[0]).toEqual({ action: 'create', content: 'Email professor tomorrow at 5pm', projectId: 'gpa' })
+  // Quick-add reads "tomorrow" as the deadline date. The request has no due date, no time and no repeat.
+  expect(be.todoistWrites[0]).toEqual({ action: 'create', content: 'Email professor at 5pm', projectId: 'gpa', deadline: addDays(today, 1) })
+  expect(Object.keys(be.todoistWrites[0]).some((k) => k.startsWith('due'))).toBe(false)
 })
 
 test('a failed add removes the task and tells the user', async ({ page }) => {

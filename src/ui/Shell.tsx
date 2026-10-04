@@ -7,6 +7,7 @@ const icon = {
   sun: <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />,
   refresh: <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" />,
   out: <path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9" />,
+  bell: <path d="M6 9a6 6 0 1 1 12 0c0 6 2 7 2 7H4s2-1 2-7zM10 20a2 2 0 0 0 4 0" />,
 }
 
 export function Icon({ name, size = 15 }: { name: keyof typeof icon; size?: number }) {
@@ -43,9 +44,10 @@ interface ShellProps {
   children: ReactNode
   onRefresh?: () => void
   onSignOut?: () => void
+  onNotifications?: () => void
 }
 
-export function Shell({ children, onRefresh, onSignOut }: ShellProps) {
+export function Shell({ children, onRefresh, onSignOut, onNotifications }: ShellProps) {
   const [theme, setTheme] = useState(currentTheme())
   return (
     <div className="flex h-full flex-col px-3.5 pb-3.5 pt-2.5">
@@ -63,6 +65,11 @@ export function Shell({ children, onRefresh, onSignOut }: ShellProps) {
           {onRefresh && (
             <RoundButton label="Refresh from Todoist" onClick={onRefresh}>
               <Icon name="refresh" />
+            </RoundButton>
+          )}
+          {onNotifications && (
+            <RoundButton label="Notifications" onClick={onNotifications}>
+              <Icon name="bell" />
             </RoundButton>
           )}
           <RoundButton label="Switch theme" onClick={() => setTheme(toggleTheme())}>

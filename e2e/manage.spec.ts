@@ -74,6 +74,69 @@ test.describe('New task card', () => {
   })
 })
 
+test.describe('Quick-add by typing', () => {
+  /** The next given weekday (0 = Sunday) strictly after today, as YYYY-MM-DD. */
+  const nextWeekday = (wd: number) => {
+    const d = new Date(`${today}T00:00:00`)
+    const diff = (wd - d.getDay() + 7) % 7 || 7
+    return addDays(today, diff)
+  }
+
+  test('one line fills time needed, deadline, subgoal and goal', async ({ page }) => {
+    const be = await openSignedIn(page, { projects, tasks: [task('Existing', 'life')] })
+    await page.getByRole('button', { name: 'New task', exact: true }).first().click()
+    const d = page.getByRole('dialog', { name: 'New task' })
+    await d.getByLabel('Task', { exact: true }).fill('Revise FM1 hard courses for 1h by fri')
+    await expect(d.locator('[data-detected]')).toContainText('Time needed 1h')
+    await expect(d.locator('[data-detected]')).toContainText('Subgoal Hard courses')
+    await d.getByRole('button', { name: 'Add task' }).click()
+
+    await expect.poll(() => be.todoistWrites.length).toBe(1)
+    expect(be.todoistWrites[0]).toEqual({
+      action: 'create',
+      content: 'Revise FM1 hard courses',
+      projectId: 'gpa',
+      labels: ['hard-courses'],
+      durationMin: 60,
+      deadline: nextWeekday(5),
+    })
+  })
+
+  test('fields you set yourself win over the typed words', async ({ page }) => {
+    const be = await openSignedIn(page, { projects, tasks: [task('Existing', 'life')] })
+    await page.getByRole('button', { name: 'New task', exact: true }).first().click()
+    const d = page.getByRole('dialog', { name: 'New task' })
+    await d.getByLabel('Goal').selectOption({ label: 'Term 2 GPA' })
+    await d.getByRole('button', { name: 'Assignments' }).click()
+    await d.getByRole('button', { name: '30m', exact: true }).click()
+    await d.getByLabel('Task', { exact: true }).fill('Weekly hard courses review 2h')
+    await d.getByRole('button', { name: 'Add task' }).click()
+    await expect.poll(() => be.todoistWrites.length).toBe(1)
+    expect(be.todoistWrites[0]).toMatchObject({ projectId: 'gpa', labels: ['assignments'], durationMin: 30, content: 'Weekly hard courses review' })
+  })
+
+  test('opened from a goal, typed subgoal words never move the task to another goal', async ({ page }) => {
+    const be = await openSignedIn(page, { projects, tasks: [task('Existing', 'life')] })
+    const life = page.locator('[data-goal="Life Admin"]')
+    await life.getByRole('button', { name: 'Add task' }).click()
+    const d = page.getByRole('dialog', { name: 'New task' })
+    await d.getByLabel('Task', { exact: true }).fill('Pay gym membership')
+    await d.getByRole('button', { name: 'Add task' }).click()
+    await expect.poll(() => be.todoistWrites.length).toBe(1)
+    expect(be.todoistWrites[0]).toEqual({ action: 'create', content: 'Pay gym membership', projectId: 'life' })
+  })
+
+  test('plain text is left alone', async ({ page }) => {
+    const be = await openSignedIn(page, { projects, tasks: [task('Existing', 'gpa')] })
+    await page.getByRole('button', { name: 'New task', exact: true }).first().click()
+    const d = page.getByRole('dialog', { name: 'New task' })
+    await d.getByLabel('Task', { exact: true }).fill('Call mum')
+    await expect(d.locator('[data-detected]')).toHaveCount(0)
+    await d.getByRole('button', { name: 'Add task' }).click()
+    await expect.poll(() => be.todoistWrites.length).toBe(1)
+    expect(be.todoistWrites[0]).toEqual({ action: 'create', content: 'Call mum', projectId: 'gpa' })
+  })
+})
 test.describe('Moving tasks', () => {
   test('Move to menu changes goal and subgoal (project, then label)', async ({ page }) => {
     const be = await openSignedIn(page, { projects, tasks: [task('Draft essay', 'gpa', { labels: ['assignments', 'urgent'] })] })

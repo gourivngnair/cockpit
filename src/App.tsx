@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { Login } from './auth/Login'
 import { earliestPlan } from './blocks/plan'
@@ -7,11 +7,14 @@ import { Calendar } from './calendar/Calendar'
 import { END, STEP } from './calendar/time'
 import { useDnd } from './dnd/useDnd'
 import { ClassesDialog } from './events/ClassesDialog'
+import { syncDone, useDoneTasks } from './history/useDoneTasks'
+import { NotificationsDialog } from './notifications/NotificationsDialog'
 import { useEvents } from './events/useEvents'
 import { toHM, toMin } from './lib/dates'
 import { configured, supabase } from './lib/supabase'
 import { Shell } from './ui/Shell'
 import { ToastProvider } from './ui/Toast'
+import { UpdateBanner } from './ui/UpdateBanner'
 import { useToast } from './ui/toastContext'
 import { GoalsPanel } from './views/GoalsPanel'
 import { VisionPlaceholder } from './views/VisionPlaceholder'
@@ -25,7 +28,28 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
   const ev = useEvents()
   const bl = useBlocks()
   const [classesOpen, setClassesOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [historyTick, setHistoryTick] = useState(0)
   const [mode, setMode] = useState<'day' | 'week'>('day')
+
+  // Keep Cockpit's own copy of completions up to date: when the app opens, every 10 minutes while
+  // it is open, and a moment after something is ticked (Todoist's log can lag a few seconds).
+  const ticks = t.completed.length + t.ticked.size
+  useEffect(() => {
+    const run = () => void syncDone().then((ok) => ok && setHistoryTick((n) => n + 1))
+    const first = setTimeout(run, ticks === 0 ? 0 : 3000)
+    const every = setInterval(run, 10 * 60 * 1000)
+    return () => {
+      clearTimeout(first)
+      clearInterval(every)
+    }
+  }, [ticks])
+
+  // Blocks whose task is no longer open: look the task up in the saved history so the block stays,
+  // faded and struck through, after a reload.
+  const orphanTaskIds = useMemo(() => [...new Set(bl.blocks.map((b) => b.taskId))].filter((id) => !t.tasks.some((x) => x.id === id)), [bl.blocks, t.tasks])
+  const history = useDoneTasks(orphanTaskIds, historyTick)
+  const completed = useMemo(() => [...t.completed, ...history.filter((h) => !t.completed.some((c) => c.id === h.id))], [t.completed, history])
 
   /** Keeps a block inside the day: it can be at most as long as the time left until midnight. */
   const fit = (start: number, minutes: number) => Math.max(STEP, Math.min(minutes, END * 60 - start))
@@ -68,7 +92,7 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
     refuse: toast,
   })
   return (
-    <Shell onRefresh={t.reload} onSignOut={onSignOut}>
+    <Shell onRefresh={t.reload} onSignOut={onSignOut} onNotifications={() => setNotificationsOpen(true)}>
       {/* Week view needs the width, so the vision panel steps aside (as in v2). */}
       <div
         className={`grid h-full gap-3 [grid-template-columns:minmax(260px,320px)_minmax(0,1fr)] ${mode === 'week' ? '' : 'min-[1320px]:[grid-template-columns:320px_minmax(0,1fr)_340px]'}`}
@@ -77,7 +101,7 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
         <Calendar
           events={ev.events}
           tasks={t.tasks}
-          completed={t.completed}
+          completed={completed}
           blocks={bl.blocks}
           projects={t.projects}
           onClasses={() => setClassesOpen(true)}
@@ -93,6 +117,7 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
           </div>
         )}
       </div>
+      {notificationsOpen && <NotificationsDialog onClose={() => setNotificationsOpen(false)} />}
       {classesOpen && (
         <ClassesDialog events={ev.events} onReplace={ev.replaceWeeks} onRemove={ev.remove} onClose={() => setClassesOpen(false)} />
       )}
@@ -120,5 +145,10 @@ export default function App() {
     )
   }
   if (session === undefined) return null
-  return <ToastProvider>{session ? <Signed onSignOut={() => void supabase.auth.signOut()} /> : <Login />}</ToastProvider>
+  return (
+    <ToastProvider>
+      {session ? <Signed onSignOut={() => void supabase.auth.signOut()} /> : <Login />}
+      <UpdateBanner />
+    </ToastProvider>
+  )
 }

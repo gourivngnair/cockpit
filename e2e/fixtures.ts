@@ -55,6 +55,12 @@ export interface FakeBlock {
   minutes: number
 }
 
+export interface FakeDone {
+  task_id: string
+  content: string
+  project_id: string
+}
+
 export interface BlockWrite {
   method: string
   /** The JSON body Cockpit sent (insert row or update fields). */
@@ -66,6 +72,13 @@ export interface Backend {
   events: FakeEvent[]
   tasks: FakeTask[]
   blocks: FakeBlock[]
+  done: FakeDone[]
+  /** How many times the app asked the server to copy Todoist completions. */
+  syncDoneCalls: number
+  /** Bodies sent to the notify function (the test button). */
+  notifyCalls: Array<Record<string, unknown>>
+  /** Inserts and deletes on push_subscriptions. */
+  pushWrites: Array<{ method: string; body: Record<string, unknown> | null }>
   failEventWrites: boolean
   failTodoistWrites: boolean
   failBlockWrites: boolean
@@ -81,6 +94,7 @@ interface Opts {
   events?: FakeEvent[]
   projects?: FakeProject[]
   blocks?: FakeBlock[]
+  done?: FakeDone[]
 }
 
 /** Signs the page in with a fake session and mocks Supabase REST and the Todoist function. */
@@ -89,6 +103,10 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     events: opts.events ?? [],
     tasks: [...(opts.tasks ?? [])],
     blocks: [...(opts.blocks ?? [])],
+    done: [...(opts.done ?? [])],
+    syncDoneCalls: 0,
+    notifyCalls: [],
+    pushWrites: [],
     failEventWrites: false,
     failTodoistWrites: false,
     failBlockWrites: false,
@@ -181,6 +199,35 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
       }
     }
     return json(route, { results: body.path === 'projects' ? projects : backend.tasks })
+  })
+
+  await page.route('**/functions/v1/sync-done', async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    backend.syncDoneCalls++
+    return json(route, { fetched: 0, saved: 0 })
+  })
+
+  await page.route('**/functions/v1/notify', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    backend.notifyCalls.push(req.postDataJSON() as Record<string, unknown>)
+    return json(route, { sent: 1, devices: 1 })
+  })
+
+  await page.route('**/rest/v1/done**', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    const m = /task_id=in\.\(([^)]*)\)/.exec(decodeURIComponent(req.url()).replace(/\+/g, ' '))
+    const ids = m ? m[1].split(',').map((s) => s.replace(/"/g, '')) : null
+    return json(route, ids ? backend.done.filter((d) => ids.includes(d.task_id)) : backend.done)
+  })
+
+  await page.route('**/rest/v1/push_subscriptions**', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    if (req.method() === 'GET') return json(route, [])
+    backend.pushWrites.push({ method: req.method(), body: req.method() === 'DELETE' ? null : (req.postDataJSON() as Record<string, unknown>) })
+    return route.fulfill({ status: req.method() === 'POST' ? 201 : 204, headers: CORS, body: '' })
   })
 
   await page.route('**/rest/v1/blocks**', async (route) => {

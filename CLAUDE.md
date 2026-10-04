@@ -27,7 +27,8 @@ All task reads and writes go through one task-source layer in `src/tasks/` (Todo
 
 **Deadline vs planned time.** A task's real deadline is Todoist's *Deadline* field (a date, no time). Its *due* date and time is the planned work time, mirrored from Cockpit's earliest upcoming block that has not finished. No block left means the due date is cleared. A repeating task's due date is its schedule and is never written.
 | Work blocks (task id, date, start, minutes) | Supabase `blocks` |
-| Completion history copy | Supabase `done` (one row per task occurrence) |
+| Completion history copy | Supabase `done` (one row per task occurrence), filled by the `sync-done` function from Todoist's activity log (the raw log calls a task an "item"). Run on app open, every 10 minutes while open, after a tick, and hourly by the scheduler. |
+| Push subscriptions (one per device), alerts already sent | Supabase `push_subscriptions`, `notified` |
 | Clean-diet answers, marks | Supabase `diet`, `marks` |
 | Focus timer state and settings | Supabase `focus` (one row) |
 | Class and meeting events (entered weekly) | Supabase `events` |

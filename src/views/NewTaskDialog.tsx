@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react'
-import { addDays, fmtDur, mondayOf, todayStr } from '../lib/dates'
+import { addDays, fmtDur, mondayOf, parseDay, todayStr } from '../lib/dates'
 import type { Project } from '../tasks'
+import { quickParse } from '../tasks/quickParse'
 import { SUBGOAL_ORDER, prettyLabel } from '../tasks/rules'
 import type { NewTask } from '../tasks/types'
 
@@ -12,6 +13,8 @@ export interface GoalOption {
 interface Props {
   goals: GoalOption[]
   initialGoalId: string
+  /** True when the card was opened from a specific goal, so typed words must not move it elsewhere. */
+  goalChosen: boolean
   onSubmit: (task: NewTask) => Promise<boolean>
   onClose: () => void
 }
@@ -21,7 +24,7 @@ const PRESETS = [15, 30, 45, 60, 90, 120]
 const chip = (on: boolean) =>
   `rounded-full border px-3 py-1 text-[13px] ${on ? 'border-ink bg-ink text-panel' : 'border-line bg-panel text-ink2'}`
 
-export function NewTaskDialog({ goals, initialGoalId, onSubmit, onClose }: Props) {
+export function NewTaskDialog({ goals, initialGoalId, goalChosen, onSubmit, onClose }: Props) {
   const [name, setName] = useState('')
   const [goalId, setGoalId] = useState(initialGoalId)
   const [subgoal, setSubgoal] = useState<string | null>(null)
@@ -29,6 +32,7 @@ export function NewTaskDialog({ goals, initialGoalId, onSubmit, onClose }: Props
   const [custom, setCustom] = useState('')
   const [date, setDate] = useState('')
   const [busy, setBusy] = useState(false)
+  const [goalTouched, setGoalTouched] = useState(goalChosen)
   const nameRef = useRef<HTMLInputElement>(null)
 
   const goal = goals.find((g) => g.project.id === goalId) ?? goals[0]
@@ -40,7 +44,16 @@ export function NewTaskDialog({ goals, initialGoalId, onSubmit, onClose }: Props
     ['End of week', addDays(mondayOf(today), 6)],
   ]
 
+  // Quick-add: durations, dates and subgoal words typed in the task name fill any field you left empty.
+  const parsed = useMemo(() => quickParse(name, todayStr()), [name])
+  const detected = [
+    parsed.durationMin ? `Time needed ${fmtDur(parsed.durationMin)}` : null,
+    parsed.deadline ? `Due ${parseDay(parsed.deadline).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}` : null,
+    parsed.subgoal ? `Subgoal ${prettyLabel(parsed.subgoal)}` : null,
+  ].filter(Boolean)
+
   function pickGoal(id: string) {
+    setGoalTouched(true)
     setGoalId(id)
     setSubgoal(null) // subgoals belong to a goal
   }
@@ -55,12 +68,22 @@ export function NewTaskDialog({ goals, initialGoalId, onSubmit, onClose }: Props
     e.preventDefault()
     if (!name.trim() || !goal) return
     setBusy(true)
+    // Fields you set yourself win; the parser only fills the empty ones.
+    let useGoal = goal
+    let useSub = subgoal
+    if (!useSub && parsed.subgoal && parsed.goalName) {
+      const detected = goals.find((g) => g.name === parsed.goalName)
+      if (detected && (detected.project.id === goal.project.id || !goalTouched)) {
+        useGoal = detected
+        useSub = parsed.subgoal
+      }
+    }
     const ok = await onSubmit({
-      content: name,
-      projectId: goal.project.inbox ? null : goal.project.id,
-      label: subgoal,
-      durationMin: minutes,
-      deadline: date || null,
+      content: parsed.title,
+      projectId: useGoal.project.inbox ? null : useGoal.project.id,
+      label: useSub,
+      durationMin: minutes ?? parsed.durationMin,
+      deadline: date || parsed.deadline || null,
     })
     setBusy(false)
     if (ok) onClose()
@@ -95,9 +118,14 @@ export function NewTaskDialog({ goals, initialGoalId, onSubmit, onClose }: Props
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="What needs doing?"
+              placeholder="What needs doing? e.g. Revise FM1 1h by Fri"
               className="w-full rounded-[10px] border border-line bg-soft px-3 py-2"
             />
+            {detected.length > 0 && (
+              <p data-detected className="m-0 mt-1.5 text-xs text-muted">
+                Detected: {detected.join(' · ')}. Used for any field you leave empty.
+              </p>
+            )}
           </div>
 
           <div>

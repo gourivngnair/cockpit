@@ -99,6 +99,15 @@ Supersedes "the Todoist due date and time is the deadline" (Constraints, Phase 1
 - One-time migration (needs explicit approval): for each existing non-repeating task whose due date was really a deadline, copy that date into the Deadline field and clear the due date. At the time of writing that is 5 tasks, all all-day dates, so no time-of-day is lost.
 - Deadline alerts (Phase 1 step 4) are date-only: the reminder time is decided when notifications are built.
 
+## Decisions (2026-10-04, Phase 1 step 4)
+- Alerts (web push, India time): 10 minutes before each **class** (events such as talks get none); at **8:00 am** one digest of today's deadlines and anything overdue (silent when none; if the 8:00 run is missed it still goes out until noon). Repeating tasks are never in the digest.
+- A scheduler in the database (pg_cron) calls the `notify` function every minute and `sync-done` hourly, authenticated by a secret kept in the Supabase vault. Both functions are deployed with `--no-verify-jwt` and check access themselves.
+- Completion history is copied into `done` so progress accrues and finished blocks stay on the calendar after a reload.
+- "New version available" banner replaces silent updates (service worker in prompt mode).
+- Quick-add by typing: the New task card reads a duration ("1h", "90 min"), a date ("fri", "tomorrow", "12 oct", "12/10") and subgoal words from the task name and fills any field left empty. Rule-based, no AI.
+- Focus mode (Phase 2) uses a 5-4-3-2-1 beep at the end of a focus round and at the end of a break instead of soundscapes. Focus sessions will be logged for the Progress page.
+- Email: tasks, assignments and exams are found on demand in a Claude chat (Gmail connector), proposed for approval, and added to Todoist. Nothing is built into Cockpit for this.
+
 ## Future direction (not in current scope)
 Gouri expects to stop using Todoist at some point and create tasks and deadlines by telling Claude in a chat. To keep that possible, the app reads tasks only through a single task-source layer (`src/tasks/`), never from Todoist directly. Replacing Todoist later means swapping that layer for Cockpit's own tasks table, plus a way for Claude chat to create tasks. Do not build this until asked.
 

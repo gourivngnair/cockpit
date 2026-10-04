@@ -195,6 +195,7 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
   const goals = buildGoals(projects, tasks)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => load('cockpit-ui', {}))
   const [dialogGoal, setDialogGoal] = useState<string | null>(null)
+  const [dialogChosen, setDialogChosen] = useState(false)
   const [menu, setMenu] = useState<{ task: Task; anchor: DOMRect } | null>(null)
 
   const blocksByTask = useMemo(() => {
@@ -242,7 +243,10 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
           aria-label="New task"
           title="New task"
           disabled={!firstGoalId}
-          onClick={() => setDialogGoal(firstGoalId)}
+          onClick={() => {
+            setDialogChosen(false)
+            setDialogGoal(firstGoalId)
+          }}
           className="grid size-[30px] place-items-center rounded-lg text-ink2 hover:bg-soft disabled:opacity-40"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -303,7 +307,10 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
                   <div className="ml-3.5 pl-2.5">
                     <button
                       type="button"
-                      onClick={() => setDialogGoal(project.id)}
+                      onClick={() => {
+                        setDialogChosen(true)
+                        setDialogGoal(project.id)
+                      }}
                       className="flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-1.5 text-left text-muted hover:bg-soft"
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -320,7 +327,7 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
         {status !== 'loading' && goals.length === 0 && <p className="px-1.5 text-xs text-muted">No projects yet.</p>}
       </div>
 
-      {dialogGoal !== null && <NewTaskDialog goals={allGoals} initialGoalId={dialogGoal} onSubmit={add} onClose={() => setDialogGoal(null)} />}
+      {dialogGoal !== null && <NewTaskDialog goals={allGoals} initialGoalId={dialogGoal} goalChosen={dialogChosen} onSubmit={add} onClose={() => setDialogGoal(null)} />}
       {menu && (
         <TaskMenu
           task={menu.task}

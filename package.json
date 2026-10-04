@@ -15,7 +15,9 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
