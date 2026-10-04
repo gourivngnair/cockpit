@@ -91,7 +91,20 @@ async function fetchAll<T>(path: 'projects' | 'tasks'): Promise<T[]> {
   return out
 }
 
+async function call<T>(body: Record<string, unknown>): Promise<T> {
+  const res: { data: T | null; error: Error | null } = await supabase.functions.invoke('todoist', { body })
+  if (res.error) throw res.error
+  return res.data as T
+}
+
 export const todoistSource: TaskSource = {
+  async createTask(content, projectId) {
+    const raw = await call<RawTask>({ action: 'create', content, ...(projectId ? { projectId } : {}) })
+    return toTask(raw)
+  },
+  async completeTask(id) {
+    await call({ action: 'close', id })
+  },
   async listProjects() {
     const raw = await fetchAll<RawProject>('projects')
     return raw.filter((p) => !p.is_archived).map(toProject)

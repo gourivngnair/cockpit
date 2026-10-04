@@ -27,4 +27,8 @@ export interface Task {
 export interface TaskSource {
   listProjects(): Promise<Project[]>
   listTasks(): Promise<Task[]>
+  /** Adds a task. Cockpit never sets a due date. projectId null means the Inbox. */
+  createTask(content: string, projectId: string | null): Promise<Task>
+  /** Completes a task (for a repeating task, today's occurrence). */
+  completeTask(id: string): Promise<void>
 }
