@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { addDays, dayName, parseDay, shortTime, todayStr } from '../lib/dates'
+import { addDays, dayName, fmtDur, parseDay, shortTime, todayStr } from '../lib/dates'
 import { goalRank, hueOf, type Project, type Task } from '../tasks'
 import { SUBGOAL_ORDER, buildGoals, canTick, prettyLabel, type Group } from '../tasks/rules'
 import type { NewTask } from '../tasks/types'
@@ -23,6 +23,9 @@ interface Props {
   setDeadline: (id: string, date: string | null) => Promise<boolean>
   blocks: Block[]
   dragging: Dragging
+  /** Total focused minutes per task, from the saved focus sessions. */
+  focusTotals: Map<string, number>
+  onFocus: (taskId: string) => void
 }
 
 const LIMIT = 5 // tasks shown per subgoal before "Show more"
@@ -58,6 +61,7 @@ interface RowProps {
   locked: boolean
   onMenu: (task: Task, anchor: DOMRect) => void
   plan: Block[]
+  focused: number
 }
 
 /** When the task is planned: its next block, plus a count if there are more. */
@@ -69,7 +73,7 @@ function planChip(plan: Block[]): string | null {
   return `${relDay(next[0].date)}${shortTime(next[0].start)}${more}`
 }
 
-function TaskRow({ task, hue, complete, locked, onMenu, plan }: RowProps) {
+function TaskRow({ task, hue, complete, locked, onMenu, plan, focused }: RowProps) {
   const today = todayStr()
   const planned = planChip(plan)
   const d = task.due
@@ -111,6 +115,11 @@ function TaskRow({ task, hue, complete, locked, onMenu, plan }: RowProps) {
           {deadline}
         </span>
       )}
+      {focused > 0 && (
+        <span className="flex-none whitespace-nowrap text-[11.5px] text-muted" title="Time focused on this task" data-focused>
+          {fmtDur(focused)}
+        </span>
+      )}
       {planned && (
         <span
           className="flex-none whitespace-nowrap rounded-md px-[7px] py-0.5 text-[11.5px] font-medium"
@@ -149,9 +158,10 @@ interface SubProps {
   complete: (id: string) => void
   onMenu: RowProps['onMenu']
   blocksByTask: Map<string, Block[]>
+  focusTotals: Map<string, number>
 }
 
-function Subgoal({ group, goalId, showOther, hue, open, onToggle, ticked, complete, onMenu, blocksByTask }: SubProps) {
+function Subgoal({ group, goalId, showOther, hue, open, onToggle, ticked, complete, onMenu, blocksByTask, focusTotals }: SubProps) {
   const shown = open ? group.tasks : group.tasks.slice(0, LIMIT)
   const hidden = group.tasks.length - LIMIT
   return (
@@ -169,7 +179,7 @@ function Subgoal({ group, goalId, showOther, hue, open, onToggle, ticked, comple
         </div>
       )}
       {shown.map((t) => (
-        <TaskRow key={t.id} task={t} hue={hue} complete={complete} locked={ticked.has(t.id)} onMenu={onMenu} plan={blocksByTask.get(t.id) ?? []} />
+        <TaskRow key={t.id} task={t} hue={hue} complete={complete} locked={ticked.has(t.id)} onMenu={onMenu} plan={blocksByTask.get(t.id) ?? []} focused={focusTotals.get(t.id) ?? 0} />
       ))}
       {hidden > 0 && (
         <button type="button" onClick={onToggle} className="w-full rounded-[10px] border-0 bg-transparent px-1.5 py-1 text-left text-[12.5px] text-muted hover:bg-soft">
@@ -190,7 +200,7 @@ function withDropZones(name: string, groups: Group[], dragging: boolean): Group[
   return zones
 }
 
-export function GoalsPanel({ projects, tasks, status, error, stale, ticked, complete, add, move, setDeadline, blocks, dragging }: Props) {
+export function GoalsPanel({ projects, tasks, status, error, stale, ticked, complete, add, move, setDeadline, blocks, dragging, focusTotals, onFocus }: Props) {
   const byId = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects])
   const goals = buildGoals(projects, tasks)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => load('cockpit-ui', {}))
@@ -302,6 +312,7 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
                       complete={complete}
                       onMenu={(task, anchor) => setMenu({ task, anchor })}
                       blocksByTask={blocksByTask}
+                      focusTotals={focusTotals}
                     />
                   ))}
                   <div className="ml-3.5 pl-2.5">
@@ -336,6 +347,7 @@ export function GoalsPanel({ projects, tasks, status, error, stale, ticked, comp
           anchor={menu.anchor}
           onMove={(target) => move(menu.task.id, target)}
           onDeadline={(due) => setDeadline(menu.task.id, due)}
+          onFocus={() => onFocus(menu.task.id)}
           onClose={() => setMenu(null)}
         />
       )}

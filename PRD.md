@@ -113,6 +113,17 @@ Supersedes "the Todoist due date and time is the deadline" (Constraints, Phase 1
 - Undoable: planning, moving, resizing and removing blocks (and the Todoist planned time that follows them); moving a task between goals and subgoals; deadline changes; completing a non-repeating task (reopened in Todoist, and its saved completion forgotten).
 - Not undoable: ticking a repeating task (reopening could disturb its schedule) and adding a task (Cockpit may not delete Todoist tasks). Ctrl+Z inside a text field keeps its normal meaning of undoing typing.
 
+## Decisions (2026-10-04, Phase 2: Focus mode)
+- Presets 25/5, 50/10, 15/3; after every 4th round the break is long (15, 20 and 10 minutes for the three presets). Focus rounds are 1 to 4, then start over.
+- A finished focus round starts its break by itself; a finished break waits for Start (the next round is paused). A device that slept through the end moves on one step from the moment it wakes, never replaying the past.
+- The timer counts to an end time (not by ticking a number), is saved in `focus` and followed by every device (live updates plus a 5 second backstop). Starting, pausing and ending are shared; the countdown beeps play only on the device that pressed Start, and only after a tap or key press there.
+- Beeps: one tick for each of the last 5 seconds and a long tone at zero, for the end of a round and the end of a break. Scheduled ahead on the audio clock so a hidden tab still beeps. A volume slider (per device); at zero nothing is scheduled. No soundscapes.
+- Playlist link kept: a Spotify or YouTube link, opened when a fresh focus round starts if "Open with focus" is on.
+- Focus log: every finished round is saved (completed), and a round ended or skipped early is saved with the minutes actually focused (not completed) if it was at least a minute. Pauses do not count. Each task shows its total focused time.
+- Starting: top bar button (picks the task whose block is on now), the Focus button on a block card, "Focus on this" in a task menu. "Mark task done" inside Focus mode completes the task and the timer carries on as plain focus.
+- Screen stays awake while counting (where the browser allows); the countdown shows in the tab title and in a pill when minimised. Space starts or pauses, Escape minimises.
+- Background is a soft gradient until the vision board (Phase 3) provides images.
+
 ## Future direction (not in current scope)
 Gouri expects to stop using Todoist at some point and create tasks and deadlines by telling Claude in a chat. To keep that possible, the app reads tasks only through a single task-source layer (`src/tasks/`), never from Todoist directly. Replacing Todoist later means swapping that layer for Cockpit's own tasks table, plus a way for Claude chat to create tasks. Do not build this until asked.
 

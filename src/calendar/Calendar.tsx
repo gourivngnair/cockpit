@@ -219,12 +219,13 @@ interface Props {
   onClasses: () => void
   onLength: (blockId: string, minutes: number) => void
   onDone: (taskId: string) => void
+  onFocus: (taskId: string) => void
   onRemove: (blockId: string) => void
   mode: 'day' | 'week'
   onMode: (mode: 'day' | 'week') => void
 }
 
-export function Calendar({ events, tasks, completed, blocks, projects, onClasses, onLength, onDone, onRemove, mode, onMode }: Props) {
+export function Calendar({ events, tasks, completed, blocks, projects, onClasses, onLength, onDone, onFocus, onRemove, mode, onMode }: Props) {
   const [day, setDay] = useState(todayStr())
   const [card, setCard] = useState<{ blockId: string; x: number; y: number } | null>(null)
   const now = useMinuteClock()
@@ -352,6 +353,10 @@ export function Calendar({ events, tasks, completed, blocks, projects, onClasses
           onDone={() => {
             setCard(null)
             onDone(cardTask.id)
+          }}
+          onFocus={() => {
+            setCard(null)
+            onFocus(cardTask.id)
           }}
           onRemove={() => {
             setCard(null)

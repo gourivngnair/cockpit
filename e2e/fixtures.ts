@@ -61,6 +61,11 @@ export interface FakeDone {
   project_id: string
 }
 
+export interface FakeSession {
+  task_id: string | null
+  minutes: number
+}
+
 export interface BlockWrite {
   method: string
   /** The JSON body Cockpit sent (insert row or update fields). */
@@ -73,6 +78,12 @@ export interface Backend {
   tasks: FakeTask[]
   blocks: FakeBlock[]
   done: FakeDone[]
+  /** Saved focus sessions (the log), and every write the app made to it. */
+  sessions: FakeSession[]
+  sessionWrites: Array<Record<string, unknown>>
+  /** The shared timer row, and every write the app made to it. */
+  focusRow: { state: unknown } | null
+  focusWrites: Array<Record<string, unknown>>
   /** Non-repeating tasks completed through Cockpit, so they can be reopened. */
   closed: FakeTask[]
   /** Deletes on the done table (undoing a completion forgets it). */
@@ -101,6 +112,8 @@ interface Opts {
   projects?: FakeProject[]
   blocks?: FakeBlock[]
   done?: FakeDone[]
+  sessions?: FakeSession[]
+  focusState?: unknown
 }
 
 /** Signs the page in with a fake session and mocks Supabase REST and the Todoist function. */
@@ -110,6 +123,10 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     tasks: [...(opts.tasks ?? [])],
     blocks: [...(opts.blocks ?? [])],
     done: [...(opts.done ?? [])],
+    sessions: [...(opts.sessions ?? [])],
+    sessionWrites: [],
+    focusRow: opts.focusState ? { state: opts.focusState } : null,
+    focusWrites: [],
     closed: [],
     doneDeletes: 0,
     syncDoneCalls: 0,
@@ -250,6 +267,26 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     if (req.method() === 'GET') return json(route, [])
     backend.pushWrites.push({ method: req.method(), body: req.method() === 'DELETE' ? null : (req.postDataJSON() as Record<string, unknown>) })
     return route.fulfill({ status: req.method() === 'POST' ? 201 : 204, headers: CORS, body: '' })
+  })
+
+  await page.route(/\/rest\/v1\/focus(\?|$)/, async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    if (req.method() === 'GET') return json(route, backend.focusRow ? [backend.focusRow] : [])
+    const body = req.postDataJSON() as { state: unknown }
+    backend.focusWrites.push(body as Record<string, unknown>)
+    backend.focusRow = { state: body.state }
+    return route.fulfill({ status: 201, headers: CORS, body: '' })
+  })
+
+  await page.route(/\/rest\/v1\/focus_sessions/, async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    if (req.method() === 'GET') return json(route, backend.sessions)
+    const body = req.postDataJSON() as Record<string, unknown>
+    backend.sessionWrites.push(body)
+    backend.sessions.push({ task_id: (body.task_id as string | null) ?? null, minutes: Number(body.minutes) })
+    return route.fulfill({ status: 201, headers: CORS, body: '' })
   })
 
   await page.route('**/rest/v1/blocks**', async (route) => {

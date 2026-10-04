@@ -21,12 +21,13 @@ interface Props {
   y: number
   onLength: (minutes: number) => void
   onDone: () => void
+  onFocus: () => void
   onRemove: () => void
   onClose: () => void
 }
 
 /** The small card that opens when you click a block. */
-export function BlockCard({ task, projectName, minutes, x, y, onLength, onDone, onRemove, onClose }: Props) {
+export function BlockCard({ task, projectName, minutes, x, y, onLength, onDone, onFocus, onRemove, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -74,6 +75,9 @@ export function BlockCard({ task, projectName, minutes, x, y, onLength, onDone, 
         ))}
       </div>
       <div className="flex flex-wrap gap-1.5">
+        <button type="button" className={`${btn} border-ink bg-ink text-panel`} onClick={onFocus}>
+          Focus
+        </button>
         <button type="button" className={btn} onClick={onDone}>
           Mark done
         </button>

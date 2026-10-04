@@ -30,7 +30,8 @@ All task reads and writes go through one task-source layer in `src/tasks/` (Todo
 | Completion history copy | Supabase `done` (one row per task occurrence), filled by the `sync-done` function from Todoist's activity log (the raw log calls a task an "item"). Run on app open, every 10 minutes while open, after a tick, and hourly by the scheduler. |
 | Push subscriptions (one per device), alerts already sent | Supabase `push_subscriptions`, `notified` |
 | Clean-diet answers, marks | Supabase `diet`, `marks` |
-| Focus timer state and settings | Supabase `focus` (one row) |
+| Focus timer state and settings | Supabase `focus` (one row: the whole timer as JSON, with a `seq` that only goes up; the higher seq wins across devices). The timer logic is the pure state machine in `src/focus/machine.ts`. |
+| Focus log (one row per focus round, whole or partial) | Supabase `focus_sessions` |
 | Class and meeting events (entered weekly) | Supabase `events` |
 | Vision images | Supabase Storage plus `vision` table |
 

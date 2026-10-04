@@ -10,7 +10,11 @@ import { ClassesDialog } from './events/ClassesDialog'
 import { forgetCompletion, syncDone, useDoneTasks } from './history/useDoneTasks'
 import { NotificationsDialog } from './notifications/NotificationsDialog'
 import { useEvents } from './events/useEvents'
-import { toHM, toMin } from './lib/dates'
+import { toHM, toMin, todayStr } from './lib/dates'
+import { FocusPill, FocusScreen } from './focus/FocusScreen'
+import { useFocus } from './focus/useFocus'
+import { useFocusLog, useFocusTotals } from './focus/useFocusLog'
+import { hueOf } from './tasks'
 import { configured, supabase } from './lib/supabase'
 import { useUndo } from './undo/useUndo'
 import { Shell } from './ui/Shell'
@@ -52,6 +56,38 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
   const history = useDoneTasks(orphanTaskIds, historyTick)
   const completed = useMemo(() => [...t.completed, ...history.filter((h) => !t.completed.some((c) => c.id === h.id))], [t.completed, history])
 
+  // Focus mode: the timer, its saved log, and the focused time shown on each task.
+  const focusLog = useFocusLog()
+  const focusTotals = useFocusTotals(focusLog.version)
+  const taskById = useMemo(() => new Map([...completed, ...t.tasks].map((x) => [x.id, x])), [t.tasks, completed])
+  const projectsById = useMemo(() => Object.fromEntries(t.projects.map((p) => [p.id, p])), [t.projects])
+  const focus = useFocus((entry) => {
+    const task = entry.taskId ? taskById.get(entry.taskId) : undefined
+    void focusLog.log(entry, task ? { content: task.content, projectId: task.projectId } : null)
+  })
+  const focusTask = focus.state.taskId ? (t.tasks.find((x) => x.id === focus.state.taskId) ?? null) : null
+  const plannedToday = useMemo(() => {
+    const today = todayStr()
+    const first = new Map<string, string>()
+    for (const b of bl.blocks) if (b.date === today && (first.get(b.taskId) ?? '99:99') > b.start) first.set(b.taskId, b.start)
+    return t.tasks.filter((x) => first.has(x.id)).sort((a, b) => (first.get(a.id) as string).localeCompare(first.get(b.id) as string))
+  }, [bl.blocks, t.tasks])
+
+  /** Open Focus mode on a task (from a block, a task menu, or the plan). */
+  const startFocus = (taskId: string | null) => {
+    focus.dispatch({ type: 'open', taskId })
+    focus.setOpen(true)
+  }
+  /** The top bar button: when nothing is running, pick the task whose block is on right now. */
+  const openFocus = () => {
+    if (!focus.state.running) {
+      const n = new Date()
+      const nowMin = n.getHours() * 60 + n.getMinutes()
+      const current = bl.blocks.find((b) => b.date === todayStr() && toMin(b.start) <= nowMin && nowMin < toMin(b.start) + b.minutes && t.tasks.some((x) => x.id === b.taskId))
+      if (current) focus.dispatch({ type: 'open', taskId: current.taskId })
+    }
+    focus.setOpen(true)
+  }
   const undo = useUndo()
   const blocksRef = useRef(bl.blocks)
   useEffect(() => {
@@ -172,13 +208,14 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
       onRefresh={t.reload}
       onSignOut={onSignOut}
       onNotifications={() => setNotificationsOpen(true)}
+      onFocus={openFocus}
       history={{ canUndo: undo.canUndo, canRedo: undo.canRedo, undoLabel: undo.undoLabel, redoLabel: undo.redoLabel, onUndo: () => void undo.undo(), onRedo: () => void undo.redo() }}
     >
       {/* Week view needs the width, so the vision panel steps aside (as in v2). */}
       <div
         className={`grid h-full gap-3 [grid-template-columns:minmax(260px,320px)_minmax(0,1fr)] ${mode === 'week' ? '' : 'min-[1320px]:[grid-template-columns:320px_minmax(0,1fr)_340px]'}`}
       >
-        <GoalsPanel {...t} complete={(id) => void completeTask(id)} move={(id, target) => void moveTask(id, target)} setDeadline={changeDeadline} blocks={bl.blocks} dragging={dnd} />
+        <GoalsPanel {...t} complete={(id) => void completeTask(id)} move={(id, target) => void moveTask(id, target)} setDeadline={changeDeadline} blocks={bl.blocks} dragging={dnd} focusTotals={focusTotals} onFocus={startFocus} />
         <Calendar
           events={ev.events}
           tasks={t.tasks}
@@ -188,6 +225,7 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
           onClasses={() => setClassesOpen(true)}
           onLength={(id, m) => void resizeBlock(id, m)}
           onDone={(taskId) => void completeTask(taskId)}
+          onFocus={startFocus}
           onRemove={(id) => void removeBlock(id)}
           mode={mode}
           onMode={setMode}
@@ -198,6 +236,15 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
           </div>
         )}
       </div>
+      <FocusScreen
+        focus={focus}
+        task={focusTask}
+        taskName={focus.state.taskId ? (taskById.get(focus.state.taskId)?.content ?? null) : null}
+        taskHue={focusTask ? hueOf(focusTask.projectId, projectsById) : '#FFFFFF'}
+        plannedToday={plannedToday}
+        onDone={(id) => void completeTask(id)}
+      />
+      <FocusPill focus={focus} />
       {notificationsOpen && <NotificationsDialog onClose={() => setNotificationsOpen(false)} />}
       {classesOpen && (
         <ClassesDialog events={ev.events} onReplace={ev.replaceWeeks} onRemove={ev.remove} onClose={() => setClassesOpen(false)} />

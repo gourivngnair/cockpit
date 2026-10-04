@@ -15,12 +15,13 @@ interface Props {
   anchor: DOMRect
   onMove: (target: MoveTarget) => void
   onDeadline: (date: string | null) => Promise<boolean>
+  onFocus: () => void
   onClose: () => void
 }
 
 const W = 280
 
-export function TaskMenu({ task, goals, currentGoalId, anchor, onMove, onDeadline, onClose }: Props) {
+export function TaskMenu({ task, goals, currentGoalId, anchor, onMove, onDeadline, onFocus, onClose }: Props) {
   const [mode, setMode] = useState<'menu' | 'move' | 'deadline'>('menu')
   const [date, setDate] = useState(task.deadline ?? '')
   const ref = useRef<HTMLDivElement>(null)
@@ -55,6 +56,17 @@ export function TaskMenu({ task, goals, currentGoalId, anchor, onMove, onDeadlin
     >
       {mode === 'menu' && (
         <>
+          <button
+            type="button"
+            role="menuitem"
+            className={row}
+            onClick={() => {
+              onFocus()
+              onClose()
+            }}
+          >
+            Focus on this
+          </button>
           <button type="button" role="menuitem" className={row} onClick={() => setMode('move')}>
             Move to…
           </button>
