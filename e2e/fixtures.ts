@@ -86,6 +86,8 @@ export interface Backend {
   failEventWrites: boolean
   failTodoistWrites: boolean
   failBlockWrites: boolean
+  /** Makes block saves slow, to test what happens while a save is still in flight. */
+  blockDelayMs: number
   eventWrites: number
   /** Every insert, update and delete Cockpit sent for blocks. */
   blockWrites: BlockWrite[]
@@ -116,6 +118,7 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     failEventWrites: false,
     failTodoistWrites: false,
     failBlockWrites: false,
+    blockDelayMs: 0,
     eventWrites: 0,
     blockWrites: [],
     todoistWrites: [],
@@ -258,6 +261,7 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     const id = eq ? decodeURIComponent(eq[1]) : null
     const body = method === 'DELETE' ? null : (req.postDataJSON() as Record<string, unknown>)
     backend.blockWrites.push({ method, body, id })
+    if (backend.blockDelayMs) await new Promise((r) => setTimeout(r, backend.blockDelayMs))
     if (backend.failBlockWrites) return json(route, { message: 'boom' }, 500)
     if (method === 'POST') {
       const rows = (Array.isArray(body) ? body : [body]) as unknown as FakeBlock[]

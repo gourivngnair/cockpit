@@ -86,52 +86,67 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
     return ok
   }
 
-  const changeBlock = async (next: Block, label: string) => {
-    const before = blocksRef.current.find((b) => b.id === next.id)
-    if (!before || !(await saveBlock(next))) return
-    undo.push({ label, undo: () => saveBlock(before), redo: () => saveBlock(next) })
-  }
+  const changeBlock = (next: Block, label: string) =>
+    undo.track(
+      (async () => {
+        const before = blocksRef.current.find((b) => b.id === next.id)
+        if (!before || !(await saveBlock(next))) return
+        undo.push({ label, undo: () => saveBlock(before), redo: () => saveBlock(next) })
+      })(),
+    )
 
   const resizeBlock = async (id: string, minutes: number) => {
     const block = blocksRef.current.find((b) => b.id === id)
     if (block) await changeBlock({ ...block, minutes: fit(toMin(block.start), minutes) }, 'Resized block')
   }
 
-  const removeBlock = async (id: string) => {
-    const block = blocksRef.current.find((b) => b.id === id)
-    if (block && (await dropBlock(block))) undo.push({ label: 'Removed block', undo: async () => !!(await addBlock(block)), redo: () => dropBlock(block) })
-  }
+  const removeBlock = (id: string) =>
+    undo.track(
+      (async () => {
+        const block = blocksRef.current.find((b) => b.id === id)
+        if (block && (await dropBlock(block))) undo.push({ label: 'Removed block', undo: async () => !!(await addBlock(block)), redo: () => dropBlock(block) })
+      })(),
+    )
 
-  const moveTask = async (id: string, target: MoveTarget) => {
-    const title = t.tasks.find((x) => x.id === id)?.content ?? 'task'
-    const moved = await t.move(id, target)
-    if (moved) undo.push({ label: `Moved "${title}"`, undo: () => t.place(moved.id, moved.before), redo: () => t.place(moved.id, moved.after) })
-  }
+  const moveTask = (id: string, target: MoveTarget) =>
+    undo.track(
+      (async () => {
+        const title = t.tasks.find((x) => x.id === id)?.content ?? 'task'
+        const moved = await t.move(id, target)
+        if (moved) undo.push({ label: `Moved "${title}"`, undo: () => t.place(moved.id, moved.before), redo: () => t.place(moved.id, moved.after) })
+      })(),
+    )
 
-  const changeDeadline = async (id: string, date: string | null) => {
-    const task = t.tasks.find((x) => x.id === id)
-    const before = task?.deadline ?? null
-    const ok = await t.setDeadline(id, date)
-    if (ok && task) undo.push({ label: `Changed deadline of "${task.content}"`, undo: () => t.setDeadline(id, before), redo: () => t.setDeadline(id, date) })
-    return ok
-  }
-
-  const completeTask = async (id: string) => {
-    const finished = await t.complete(id) // only non-repeating tasks come back here, so only those can be undone
-    if (!finished) return
-    undo.push({
-      label: `Completed "${finished.content}"`,
-      undo: async () => {
-        const ok = await t.reopen(finished)
-        if (ok) {
-          await forgetCompletion(finished.id) // it is not done any more, so it must not count in the history
-          setHistoryTick((n) => n + 1)
-        }
+  const changeDeadline = (id: string, date: string | null) =>
+    undo.track(
+      (async () => {
+        const task = t.tasks.find((x) => x.id === id)
+        const before = task?.deadline ?? null
+        const ok = await t.setDeadline(id, date)
+        if (ok && task) undo.push({ label: `Changed deadline of "${task.content}"`, undo: () => t.setDeadline(id, before), redo: () => t.setDeadline(id, date) })
         return ok
-      },
-      redo: async () => !!(await t.complete(finished.id)),
-    })
-  }
+      })(),
+    )
+
+  const completeTask = (id: string) =>
+    undo.track(
+      (async () => {
+        const finished = await t.complete(id) // only non-repeating tasks come back here, so only those can be undone
+        if (!finished) return
+        undo.push({
+          label: `Completed "${finished.content}"`,
+          undo: async () => {
+            const ok = await t.reopen(finished)
+            if (ok) {
+              await forgetCompletion(finished.id) // it is not done any more, so it must not count in the history
+              setHistoryTick((n) => n + 1)
+            }
+            return ok
+          },
+          redo: async () => !!(await t.complete(finished.id)),
+        })
+      })(),
+    )
 
   const dnd = useDnd({
     moveTask: (id, target) => void moveTask(id, target),
@@ -139,9 +154,11 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
       const task = t.tasks.find((x) => x.id === taskId)
       if (!task) return
       const minutes = fit(start, task.durationMin ?? DEFAULT_MINUTES)
-      void addBlock({ taskId, date, start: toHM(start), minutes }).then((made) => {
-        if (made) undo.push({ label: `Planned "${task.content}"`, undo: () => dropBlock(made), redo: async () => !!(await addBlock(made)) })
-      })
+      void undo.track(
+        addBlock({ taskId, date, start: toHM(start), minutes }).then((made) => {
+          if (made) undo.push({ label: `Planned "${task.content}"`, undo: () => dropBlock(made), redo: async () => !!(await addBlock(made)) })
+        }),
+      )
     },
     moveBlock: (id, date, start) => {
       const block = blocksRef.current.find((b) => b.id === id)

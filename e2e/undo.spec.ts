@@ -219,6 +219,30 @@ test.describe('undo and redo', () => {
     expect(be.blockWrites.map((w) => w.method)).toEqual(['POST'])
   })
 
+  test('Ctrl+Z pressed while the save is still in flight waits for it, then undoes it', async ({ page }) => {
+    const be = await open(page, { tasks: [task('Write report')] })
+    be.blockDelayMs = 1200 // the save is slow, so the block shows before it is confirmed
+    await dragToSlot(page, page.locator('[data-task="Write report"]'), page.locator('[data-lane]').first(), 9)
+    await expect(page.locator('[data-kind="block"]')).toHaveCount(1)
+    await page.keyboard.press(UNDO) // pressed straight away, before the save has finished
+    be.blockDelayMs = 0
+    await expect(page.locator('[data-kind="block"]')).toHaveCount(0)
+    expect(be.blockWrites.map((w) => w.method)).toEqual(['POST', 'DELETE'])
+    await expect(page.getByRole('status').last()).not.toContainText('Nothing to undo')
+  })
+
+  test('two quick Ctrl+Z presses undo two actions, in order', async ({ page }) => {
+    const be = await open(page, { tasks: [task('A'), task('B')] })
+    const lane = page.locator('[data-lane]').first()
+    await dragToSlot(page, page.locator('[data-task="A"]'), lane, 9)
+    await dragToSlot(page, page.locator('[data-task="B"]'), lane, 11)
+    await expect(page.locator('[data-kind="block"]')).toHaveCount(2)
+    await page.keyboard.press(UNDO)
+    await page.keyboard.press(UNDO)
+    await expect(page.locator('[data-kind="block"]')).toHaveCount(0)
+    expect(be.blockWrites.map((w) => w.method)).toEqual(['POST', 'POST', 'DELETE', 'DELETE'])
+  })
+
   test('a failed undo leaves the action on the list so it can be tried again', async ({ page }) => {
     const be = await open(page, { tasks: [task('Write report')] })
     await dragToSlot(page, page.locator('[data-task="Write report"]'), page.locator('[data-lane]').first(), 9)

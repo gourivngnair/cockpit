@@ -37,10 +37,23 @@ export function useUndo() {
   const [stacks, setStacksState] = useState<Stacks>({ undo: [], redo: [] })
   // The same stacks, readable from event handlers without waiting for a render.
   const live = useRef<Stacks>(stacks)
-  const running = useRef(false)
   const setStacks = useCallback((next: Stacks) => {
     live.current = next
     setStacksState(next)
+  }, [])
+
+  // Saves still in flight. A change appears on screen at once but is only recorded for undo once it
+  // has been saved, so undo waits for these first (otherwise Ctrl+Z right after a drop finds nothing).
+  const pending = useRef(new Set<Promise<unknown>>())
+  // Undo and redo run one at a time, in the order they were asked for.
+  const chain = useRef<Promise<void>>(Promise.resolve())
+
+  /** Wrap a change that records itself with push(), so undo can wait for it. */
+  const track = useCallback(<T,>(work: Promise<T>): Promise<T> => {
+    pending.current.add(work)
+    const done = () => void pending.current.delete(work)
+    work.then(done, done)
+    return work
   }, [])
 
   /** Record something that was just done. Anything that was waiting to be redone is dropped. */
@@ -49,41 +62,40 @@ export function useUndo() {
     [setStacks],
   )
 
-  const undo = useCallback(async () => {
-    if (running.current) return
+  const runUndo = useCallback(async () => {
     const action = live.current.undo.at(-1)
     if (!action) return void toast('Nothing to undo.')
-    running.current = true
     setStacks({ undo: live.current.undo.slice(0, -1), redo: live.current.redo })
-    try {
-      if (await action.undo()) {
-        setStacks({ undo: live.current.undo, redo: [...live.current.redo, action] })
-        toast(`Undid: ${action.label}`)
-      } else {
-        setStacks({ undo: [...live.current.undo, action], redo: live.current.redo }) // it did not work, so it can be tried again
-      }
-    } finally {
-      running.current = false
+    if (await action.undo()) {
+      setStacks({ undo: live.current.undo, redo: [...live.current.redo, action] })
+      toast(`Undid: ${action.label}`)
+    } else {
+      setStacks({ undo: [...live.current.undo, action], redo: live.current.redo }) // it did not work, so it can be tried again
     }
   }, [setStacks, toast])
 
-  const redo = useCallback(async () => {
-    if (running.current) return
+  const runRedo = useCallback(async () => {
     const action = live.current.redo.at(-1)
     if (!action) return void toast('Nothing to redo.')
-    running.current = true
     setStacks({ undo: live.current.undo, redo: live.current.redo.slice(0, -1) })
-    try {
-      if (await action.redo()) {
-        setStacks({ undo: [...live.current.undo, action], redo: live.current.redo })
-        toast(`Redid: ${action.label}`)
-      } else {
-        setStacks({ undo: live.current.undo, redo: [...live.current.redo, action] })
-      }
-    } finally {
-      running.current = false
+    if (await action.redo()) {
+      setStacks({ undo: [...live.current.undo, action], redo: live.current.redo })
+      toast(`Redid: ${action.label}`)
+    } else {
+      setStacks({ undo: live.current.undo, redo: [...live.current.redo, action] })
     }
   }, [setStacks, toast])
+
+  const queue = useCallback((run: () => Promise<void>) => {
+    chain.current = chain.current.then(async () => {
+      await Promise.allSettled([...pending.current])
+      await run()
+    })
+    return chain.current
+  }, [])
+
+  const undo = useCallback(() => queue(runUndo), [queue, runUndo])
+  const redo = useCallback(() => queue(runRedo), [queue, runRedo])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -98,6 +110,7 @@ export function useUndo() {
 
   return {
     push,
+    track,
     undo,
     redo,
     canUndo: stacks.undo.length > 0,
