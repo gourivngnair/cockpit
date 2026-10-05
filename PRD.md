@@ -24,7 +24,7 @@ Gouri needs one calm, beautiful place to plan Term 2 around her four goals. The 
 |---|---|---|
 | 1 | Term 2 GPA (above 7) | hard-courses, end-terms, assignments |
 | 2 | Excel Outside Class | competition, dracula, research-paper |
-| 3 | 55 kg and Healthy | gym, morning-routine, clean-diet |
+| 3 | 55 kg and Healthy | gym, morning-routine (clean diet is tracked on the Progress page, not as a task) |
 | 4 | Better Writer | substack, bradbury, monthly-book |
 | 5 | Life Admin (maintenance) | none |
 
@@ -132,6 +132,18 @@ Supersedes "the Todoist due date and time is the deadline" (Constraints, Phase 1
 - "Pinterest board" button links to https://pin.it/3M7bCmDl1.
 - Today's vision: an image pinned for today wins; otherwise the images take turns, one a day, in the order they were added (same on every device). A shuffle button moves on to the next image for this session only. Shown in the right-hand panel at 1320 px wide and above (Day view), and as a slim strip above the calendar on narrower screens such as the tablet (Day view only).
 - The same image is the blurred background of Focus mode, with a "Next image" button. Today's image is kept on the device so it still shows with no connection, and the board's list is kept too.
+
+## Decisions (2026-10-05, Phase 4: Progress)
+- **Counts start on 5 Oct 2026 (the first day of Term 2) and nothing earlier is counted.** The 15 older test completions in Cockpit's saved history were deleted, and the completion sync never reads Todoist's activity log before that day (even from an earlier saved position). Bradbury nights are counted from the night of 5 Oct.
+- Term calendar (fixed in the app, `src/progress/stats.ts`): term starts 5 Oct, the first weekly hard-course review is due 24 Oct, the blackout starts 15 Nov, term ends about 15 Dec.
+- A **Progress** tab sits between Plan and Vision. At the top, a "this week" strip: tasks done, focus today, focus this week, gym this week out of 3, and focus for the last 4 weeks. Then one card per goal, each ending with "Focused this week":
+  - Term 2 GPA: hard-course reviews done against due, assignments on time. **Marks are not shown** (the PRD's manual marks entry is dropped).
+  - Excel Outside Class: milestones checklist (finished and open one-off tasks, overdue flagged) and the blackout note. Milestones appear on this card only.
+  - 55 kg and Healthy: gym this week out of 3 with a 4-week chart, morning-routine streak and 14 days, clean diet 14 days.
+  - Better Writer: Bradbury nights out of 1,000 with streak, bar and 14 nights, essays published, books finished.
+  - Life Admin: done this week, overdue, open.
+- **Clean diet is no longer a task or subgoal.** It is only the daily yes or no on the Progress page (Yesterday and Today buttons; tap a past day's dot to cycle clean, not really, none). There is no prompt on the Goals panel and no evening question or reminder.
+- Gym in Todoist was changed to every Mon, Wed and Fri at 6:30 am (30 minutes), keeping the target of 3 a week.
 
 ## Future direction (not in current scope)
 Gouri expects to stop using Todoist at some point and create tasks and deadlines by telling Claude in a chat. To keep that possible, the app reads tasks only through a single task-source layer (`src/tasks/`), never from Todoist directly. Replacing Todoist later means swapping that layer for Cockpit's own tasks table, plus a way for Claude chat to create tasks. Do not build this until asked.

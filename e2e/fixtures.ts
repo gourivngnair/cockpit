@@ -59,11 +59,19 @@ export interface FakeDone {
   task_id: string
   content: string
   project_id: string
+  // What the Progress page reads. Defaults are filled in by the test backend.
+  labels?: string[]
+  date?: string
+  completed_at?: string
+  late?: boolean
+  recurring?: boolean
 }
 
 export interface FakeSession {
   task_id: string | null
   minutes: number
+  project_id?: string
+  started_at?: string
 }
 
 export interface FakeVision {
@@ -89,6 +97,10 @@ export interface Backend {
   tasks: FakeTask[]
   blocks: FakeBlock[]
   done: FakeDone[]
+  /** Clean-diet answers by day, and every write the app made to them. */
+  diet: Record<string, boolean>
+  dietWrites: Array<{ method: string; body: Record<string, unknown> | null; query: string }>
+  failDietWrites: boolean
   /** The vision board rows, and everything the app did to storage and to the table. */
   vision: FakeVision[]
   uploads: Array<{ path: string; body: Buffer }>
@@ -135,6 +147,7 @@ interface Opts {
   projects?: FakeProject[]
   blocks?: FakeBlock[]
   done?: FakeDone[]
+  diet?: Record<string, boolean>
   vision?: FakeVision[]
   sessions?: FakeSession[]
   focusState?: unknown
@@ -147,6 +160,9 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     tasks: [...(opts.tasks ?? [])],
     blocks: [...(opts.blocks ?? [])],
     done: [...(opts.done ?? [])],
+    diet: { ...(opts.diet ?? {}) },
+    dietWrites: [],
+    failDietWrites: false,
     vision: [...(opts.vision ?? [])],
     uploads: [],
     removedPaths: [],
@@ -291,7 +307,8 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     }
     const m = /task_id=in\.\(([^)]*)\)/.exec(decodeURIComponent(req.url()).replace(/\+/g, ' '))
     const ids = m ? m[1].split(',').map((s) => s.replace(/"/g, '')) : null
-    return json(route, ids ? backend.done.filter((d) => ids.includes(d.task_id)) : backend.done)
+    const rows = backend.done.map((d) => ({ labels: [], date: '2026-10-05', completed_at: '2026-10-05T07:00:00', late: false, recurring: false, ...d }))
+    return json(route, ids ? rows.filter((d) => ids.includes(d.task_id)) : rows)
   })
 
   await page.route('**/rest/v1/push_subscriptions**', async (route) => {
@@ -300,6 +317,23 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
     if (req.method() === 'GET') return json(route, [])
     backend.pushWrites.push({ method: req.method(), body: req.method() === 'DELETE' ? null : (req.postDataJSON() as Record<string, unknown>) })
     return route.fulfill({ status: req.method() === 'POST' ? 201 : 204, headers: CORS, body: '' })
+  })
+
+  await page.route(/\/rest\/v1\/diet/, async (route) => {
+    const req = route.request()
+    const method = req.method()
+    if (method === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    if (method === 'GET') return json(route, Object.entries(backend.diet).map(([date, ok]) => ({ date, ok })))
+    const query = decodeURIComponent(new URL(req.url()).search)
+    const body = method === 'DELETE' ? null : (req.postDataJSON() as Record<string, unknown>)
+    backend.dietWrites.push({ method, body, query })
+    if (backend.failDietWrites) return json(route, { message: 'boom' }, 500)
+    if (method === 'POST' && body) backend.diet[String(body.date)] = Boolean(body.ok)
+    if (method === 'DELETE') {
+      const date = /[?&]date=eq\.([^&]+)/.exec(query)?.[1]
+      if (date) delete backend.diet[date]
+    }
+    return route.fulfill({ status: method === 'POST' ? 201 : 204, headers: CORS, body: '' })
   })
 
   // The vision board: rows, private image files and the secure links to them.
@@ -369,7 +403,7 @@ export async function openSignedIn(page: Page, opts: Opts = {}): Promise<Backend
   await page.route(/\/rest\/v1\/focus_sessions/, async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
-    if (req.method() === 'GET') return json(route, backend.sessions)
+    if (req.method() === 'GET') return json(route, backend.sessions.map((s) => ({ project_id: '', started_at: '2026-10-05T09:00:00', ...s })))
     const body = req.postDataJSON() as Record<string, unknown>
     backend.sessionWrites.push(body)
     backend.sessions.push({ task_id: (body.task_id as string | null) ?? null, minutes: Number(body.minutes) })

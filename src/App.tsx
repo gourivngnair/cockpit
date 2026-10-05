@@ -22,6 +22,7 @@ import { ToastProvider } from './ui/Toast'
 import { UpdateBanner } from './ui/UpdateBanner'
 import { useToast } from './ui/toastContext'
 import { GoalsPanel } from './views/GoalsPanel'
+import { ProgressView } from './progress/ProgressView'
 import { TodaysVision, TodaysVisionBanner } from './vision/TodaysVision'
 import { VisionPage } from './vision/VisionPage'
 import { pickToday } from './vision/today'
@@ -31,6 +32,8 @@ import { useVision } from './vision/useVision'
 import { useTasks, type MoveTarget } from './views/useTasks'
 
 const DEFAULT_MINUTES = 30
+
+type View = 'plan' | 'progress' | 'vision'
 
 function Signed({ onSignOut }: { onSignOut: () => void }) {
   const toast = useToast()
@@ -62,9 +65,10 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
   const completed = useMemo(() => [...t.completed, ...history.filter((h) => !t.completed.some((c) => c.id === h.id))], [t.completed, history])
 
   // The two screens, kept in the address (#/vision) so the browser's back button works.
-  const [view, setView] = useState<'plan' | 'vision'>(() => (window.location.hash === '#/vision' ? 'vision' : 'plan'))
+  const viewFromAddress = (): View => (window.location.hash === '#/vision' ? 'vision' : window.location.hash === '#/progress' ? 'progress' : 'plan')
+  const [view, setView] = useState<View>(viewFromAddress)
   useEffect(() => {
-    const onPop = () => setView(window.location.hash === '#/vision' ? 'vision' : 'plan')
+    const onPop = () => setView(viewFromAddress())
     window.addEventListener('popstate', onPop)
     window.addEventListener('hashchange', onPop)
     return () => {
@@ -72,9 +76,9 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
       window.removeEventListener('hashchange', onPop)
     }
   }, [])
-  const navigate = (next: 'plan' | 'vision') => {
+  const navigate = (next: View) => {
     if (next === view) return
-    window.history.pushState(null, '', next === 'vision' ? '#/vision' : window.location.pathname + window.location.search)
+    window.history.pushState(null, '', next === 'plan' ? window.location.pathname + window.location.search : `#/${next}`)
     setView(next)
   }
 
@@ -243,7 +247,9 @@ function Signed({ onSignOut }: { onSignOut: () => void }) {
       history={{ canUndo: undo.canUndo, canRedo: undo.canRedo, undoLabel: undo.undoLabel, redoLabel: undo.redoLabel, onUndo: () => void undo.undo(), onRedo: () => void undo.redo() }}
     >
       {/* Week view needs the width, so the vision panel steps aside (as in v2). */}
-      {view === 'vision' ? (
+      {view === 'progress' ? (
+        <ProgressView projects={t.projects} tasks={t.tasks} refresh={historyTick} />
+      ) : view === 'vision' ? (
         <VisionPage images={vision.images} uploading={vision.uploading} today={todayStr()} onUpload={vision.upload} onUpdate={vision.update} onRemove={vision.remove} onPin={vision.pin} />
       ) : (
         <div

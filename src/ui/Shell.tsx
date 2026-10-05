@@ -7,6 +7,7 @@ const icon = {
   sun: <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />,
   refresh: <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" />,
   out: <path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9" />,
+  chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   vision: (
     <>
       <rect x="4" y="4" width="16" height="16" rx="3" />
@@ -62,8 +63,8 @@ interface ShellProps {
   onSignOut?: () => void
   onNotifications?: () => void
   onFocus?: () => void
-  view?: 'plan' | 'vision'
-  onView?: (view: 'plan' | 'vision') => void
+  view?: 'plan' | 'progress' | 'vision'
+  onView?: (view: 'plan' | 'progress' | 'vision') => void
   history?: { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null; onUndo: () => void; onRedo: () => void }
 }
 
@@ -76,7 +77,7 @@ export function Shell({ children, onRefresh, onSignOut, onNotifications, onFocus
           <i className="size-2.5 rounded-[3px] bg-panel" />
         </div>
         <nav className="flex gap-0.5 rounded-full border border-line bg-panel p-[3px]" aria-label="Main">
-          {([['plan', 'Plan'], ['vision', 'Vision']] as const)
+          {([['plan', 'Plan'], ['progress', 'Progress'], ['vision', 'Vision']] as const)
             .filter(([v]) => v === 'plan' || onView)
             .map(([v, label]) => (
               <button
@@ -86,7 +87,7 @@ export function Shell({ children, onRefresh, onSignOut, onNotifications, onFocus
                 onClick={() => onView?.(v)}
                 className={`flex items-center gap-[7px] rounded-full px-3.5 py-1.5 font-medium ${view === v ? 'bg-soft text-ink' : 'text-muted'}`}
               >
-                <Icon name={v === 'plan' ? 'plan' : 'vision'} />
+                <Icon name={v === 'plan' ? 'plan' : v === 'progress' ? 'chart' : 'vision'} />
                 {label}
               </button>
             ))}

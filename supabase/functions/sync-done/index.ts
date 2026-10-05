@@ -7,7 +7,9 @@ import { admin, authorize, cors, json, ownerId, todoistList } from '../_shared/s
 import { toDoneRow, type DoneRow } from './done.ts'
 
 const TZ = Deno.env.get('TZ_NAME') ?? 'Asia/Kolkata'
-const TERM_PREP_START = '2026-09-24T00:00:00+05:30' // before Term 2, so the first run catches up
+// Progress counts from the first day of Term 2 (decided 2026-10-05). Nothing earlier is ever read, so
+// the old test activity cannot come back, whatever the saved position is.
+const HISTORY_START = new Date('2026-10-05T00:00:00+05:30')
 const OVERLAP_MS = 2 * 24 * 3600 * 1000 // re-read a little history each time; duplicates are ignored
 
 Deno.serve(async (req) => {
@@ -20,7 +22,8 @@ Deno.serve(async (req) => {
   if (!userId) return json({ error: 'No user.' }, 500)
 
   const { data: last } = await db.from('done').select('completed_at').eq('user_id', userId).order('completed_at', { ascending: false }).limit(1)
-  const since = last?.[0]?.completed_at ? new Date(new Date(last[0].completed_at).getTime() - OVERLAP_MS) : new Date(TERM_PREP_START)
+  const resume = last?.[0]?.completed_at ? new Date(new Date(last[0].completed_at).getTime() - OVERLAP_MS) : HISTORY_START
+  const since = resume > HISTORY_START ? resume : HISTORY_START
   const until = new Date(Date.now() + 60_000)
   const range = { date_from: since.toISOString(), date_to: until.toISOString() }
 

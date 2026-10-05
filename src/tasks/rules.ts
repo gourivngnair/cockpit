@@ -5,7 +5,8 @@ import type { Project, Task } from './types'
 export const SUBGOAL_ORDER: Record<string, string[]> = {
   'Term 2 GPA': ['hard-courses', 'end-terms', 'assignments'],
   'Excel Outside Class': ['competition', 'dracula', 'research-paper'],
-  '55 kg and Healthy': ['gym', 'morning-routine', 'clean-diet'],
+  // Clean diet is not a task: it is a daily yes or no on the Progress page (decided 2026-10-05).
+  '55 kg and Healthy': ['gym', 'morning-routine'],
   'Better Writer': ['substack', 'bradbury', 'monthly-book'],
 }
 
