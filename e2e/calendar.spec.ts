@@ -33,6 +33,14 @@ test('one-off events are solid blue, classes stay grey dashed', async ({ page })
   await expect(page.locator('[data-kind="class"]', { hasText: 'Strategy' })).toHaveCSS('border-top-style', 'dashed')
 })
 
+test('exams are solid red', async ({ page }) => {
+  const exam: FakeEvent = { id: 'e-x', title: 'FM1 Mid-Term', date: today, start_time: '08:30:00', end_time: '10:00:00', room: '', kind: 'exam' }
+  await openSignedIn(page, { tasks: [], events: [exam] })
+  const ev = page.locator('[data-kind="exam"]', { hasText: 'FM1 Mid-Term' })
+  await expect(ev).toBeVisible()
+  await expect(ev).toHaveCSS('border-top-style', 'solid')
+})
+
 test('week view lays out seven days', async ({ page }) => {
   await openSignedIn(page, { tasks, events: [klass] })
   await page.getByRole('button', { name: 'Week' }).click()

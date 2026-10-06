@@ -10,6 +10,9 @@ const TZ = Deno.env.get('TZ_NAME') ?? 'Asia/Kolkata'
 // Progress counts from the first day of Term 2 (decided 2026-10-05). Nothing earlier is ever read, so
 // the old test activity cannot come back, whatever the saved position is.
 const HISTORY_START = new Date('2026-10-05T00:00:00+05:30')
+// Tasks that were only ever tests (made and deleted by me while checking how Todoist behaves). Todoist keeps
+// their completions in its log, so they are skipped here.
+const IGNORED_TASKS = new Set(['6hgx32PxJ834RXM9', '6hgx37M2Fh4Pmqp9'])
 const OVERLAP_MS = 2 * 24 * 3600 * 1000 // re-read a little history each time; duplicates are ignored
 
 Deno.serve(async (req) => {
@@ -49,7 +52,7 @@ Deno.serve(async (req) => {
   const rows = new Map<string, DoneRow>()
   for (const ev of result.items) {
     const row = toDoneRow(ev, TZ)
-    if (row) rows.set(row.id, row)
+    if (row && !IGNORED_TASKS.has(row.task_id)) rows.set(row.id, row)
   }
 
   if (rows.size === 0 && result.items.length > 0) {

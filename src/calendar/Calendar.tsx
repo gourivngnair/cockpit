@@ -17,8 +17,15 @@ const EVENT_STYLE = {
   borderColor: `color-mix(in srgb, ${EVENT_HUE} 40%, var(--panel))`,
 }
 
+const EXAM_HUE = '#F0443A'
+const EXAM_STYLE = {
+  color: EXAM_HUE,
+  background: `color-mix(in srgb, ${EXAM_HUE} 15%, var(--panel))`,
+  borderColor: `color-mix(in srgb, ${EXAM_HUE} 45%, var(--panel))`,
+}
+
 interface Item {
-  kind: 'class' | 'event' | 'rt' | 'block' | 'done'
+  kind: 'class' | 'event' | 'exam' | 'rt' | 'block' | 'done'
   key: string
   title: string
   detail: string
@@ -146,6 +153,7 @@ function Lane({ day, compact, data, now, onBlock }: LaneProps) {
           width: `calc(${w}% - 8px)`,
         }
         if (b.kind === 'event') Object.assign(style, EVENT_STYLE)
+        if (b.kind === 'exam') Object.assign(style, EXAM_STYLE)
         if (isBlock && b.hue) {
           Object.assign(style, {
             color: b.hue,
@@ -153,7 +161,7 @@ function Lane({ day, compact, data, now, onBlock }: LaneProps) {
             borderColor: 'transparent',
           })
         }
-        const look = isBlock ? 'border-solid' : b.kind === 'event' ? 'border-solid' : 'border-dashed border-grey-line bg-grey-fill text-grey-ink'
+        const look = isBlock ? 'border-solid' : b.kind === 'event' || b.kind === 'exam' ? 'border-solid' : 'border-dashed border-grey-line bg-grey-fill text-grey-ink'
         const live = b.kind === 'block'
         return (
           <div

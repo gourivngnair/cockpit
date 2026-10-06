@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { dayName, shortTime, parseDay } from '../lib/dates'
-import { parseSchedule, weeksOf } from './parse'
+import { isReplaced, parseSchedule } from './parse'
 import type { EventRow } from './useEvents'
 import type { NewEvent } from './parse'
 
@@ -18,8 +18,7 @@ export function ClassesDialog({ events, onReplace, onRemove, onClose }: Props) {
 
   const replacing = useMemo(() => {
     if (!parsed || parsed.events.length === 0) return 0
-    const weeks = weeksOf(parsed.events)
-    return events.filter((e) => weeks.some(([a, b]) => e.date >= a && e.date <= b)).length
+    return events.filter((e) => isReplaced(e, parsed.events)).length
   }, [parsed, events])
 
   const sorted = [...events].sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
@@ -51,7 +50,7 @@ export function ClassesDialog({ events, onReplace, onRemove, onClose }: Props) {
         <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
           <h3 className="m-0 mb-1 text-[13px] font-semibold text-ink2">Import a week</h3>
           <p className="m-0 mb-2 text-[13px] text-muted">
-            Send Claude a screenshot of your schedule, then paste what it gives you here. Importing replaces any classes and events already saved in those weeks.
+            Send Claude a screenshot of your schedule, then paste what it gives you here. Importing replaces the classes and events already saved in those weeks. Exams are only replaced by another exam import.
           </p>
           <textarea
             aria-label="Schedule from Claude"
@@ -95,6 +94,7 @@ export function ClassesDialog({ events, onReplace, onRemove, onClose }: Props) {
                   </span>
                   <span className="flex-1">
                     <b className="font-semibold">{e.title}</b>
+                    {e.kind === 'exam' && <span className="ml-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium" style={{ color: '#F0443A', background: 'color-mix(in srgb, #F0443A 15%, var(--panel))' }}>Exam</span>}
                     {e.kind === 'event' && <span className="ml-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium" style={{ color: '#1C8BD6', background: 'color-mix(in srgb, #1C8BD6 15%, var(--panel))' }}>Event</span>}
                     <span className="text-muted">
                       {' '}

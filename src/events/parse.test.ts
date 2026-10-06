@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSchedule, weeksOf } from './parse'
+import { isReplaced, parseSchedule, weeksOf } from './parse'
 
 describe('parseSchedule', () => {
   it('accepts a valid week', () => {
@@ -37,6 +37,23 @@ describe('parseSchedule kind', () => {
   })
   it('rejects unknown kinds', () => {
     expect(parseSchedule(JSON.stringify([{ ...row, kind: 'meeting' }])).errors[0]).toMatch(/kind must be/)
+  })
+})
+
+describe('exams', () => {
+  const mk = (date: string, kind: 'class' | 'event' | 'exam') => ({ title: 't', date, start: '09:00', end: '10:00', room: '', kind })
+  it('are accepted as a kind', () => {
+    const row = { title: 'Exam', date: '2026-11-01', start: '10:30', end: '12:00' }
+    expect(parseSchedule(JSON.stringify([{ ...row, kind: 'exam' }])).events[0].kind).toBe('exam')
+  })
+  it('are not wiped by the weekly class import, and do not wipe classes', () => {
+    const classes = [mk('2026-11-02', 'class')]
+    const exams = [mk('2026-11-01', 'exam')]
+    expect(isReplaced({ date: '2026-11-01', kind: 'exam' }, classes)).toBe(false)
+    expect(isReplaced({ date: '2026-11-02', kind: 'class' }, exams)).toBe(false)
+    expect(isReplaced({ date: '2026-11-02', kind: 'event' }, classes)).toBe(true)
+    expect(isReplaced({ date: '2026-11-01', kind: 'exam' }, exams)).toBe(true)
+    expect(isReplaced({ date: '2026-11-20', kind: 'class' }, classes)).toBe(false)
   })
 })
 

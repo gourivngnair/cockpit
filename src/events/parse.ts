@@ -6,7 +6,7 @@ export interface NewEvent {
   start: string // HH:MM
   end: string // HH:MM
   room: string
-  kind: 'class' | 'event'
+  kind: 'class' | 'event' | 'exam'
 }
 
 export interface ParseResult {
@@ -17,7 +17,7 @@ export interface ParseResult {
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
-/** Parses the pasted weekly schedule: a JSON array of {title,date,start,end,room?,kind?}. kind is "class" (default) or "event". */
+/** Parses the pasted weekly schedule: a JSON array of {title,date,start,end,room?,kind?}. kind is "class" (default), "event" or "exam". */
 export function parseSchedule(text: string): ParseResult {
   let raw: unknown
   try {
@@ -37,15 +37,26 @@ export function parseSchedule(text: string): ParseResult {
     const start = typeof o.start === 'string' ? o.start : ''
     const end = typeof o.end === 'string' ? o.end : ''
     const room = typeof o.room === 'string' ? o.room.trim() : ''
-    const kind = o.kind === undefined || o.kind === 'class' ? 'class' : o.kind === 'event' ? 'event' : null
+    const kind = o.kind === undefined || o.kind === 'class' ? 'class' : o.kind === 'event' || o.kind === 'exam' ? o.kind : null
     if (!title) return void errors.push(`Item ${n}: missing title.`)
-    if (!kind) return void errors.push(`Item ${n} (${title}): kind must be "class" or "event".`)
+    if (!kind) return void errors.push(`Item ${n} (${title}): kind must be "class", "event" or "exam".`)
     if (!DATE.test(date) || Number.isNaN(Date.parse(date))) return void errors.push(`Item ${n} (${title}): bad date "${date}".`)
     if (!TIME.test(start) || !TIME.test(end)) return void errors.push(`Item ${n} (${title}): times must look like 09:30.`)
     if (toMin(end) <= toMin(start)) return void errors.push(`Item ${n} (${title}): ends before it starts.`)
     events.push({ title, date, start, end, room, kind })
   })
   return { events, errors }
+}
+
+/**
+ * Whether importing `incoming` replaces a saved item. Only items in the same weeks are replaced, and exams
+ * and timetable items never replace each other (the weekly class import must not wipe the exam dates).
+ */
+export function isReplaced(saved: { date: string; kind: NewEvent['kind'] }, incoming: NewEvent[]): boolean {
+  const weeks = weeksOf(incoming)
+  if (!weeks.some(([a, b]) => saved.date >= a && saved.date <= b)) return false
+  const group = (k: NewEvent['kind']) => (k === 'exam' ? 'exam' : 'timetable')
+  return incoming.some((e) => group(e.kind) === group(saved.kind))
 }
 
 /** Monday-to-Sunday weeks touched by the events, as [from, to] inclusive. */

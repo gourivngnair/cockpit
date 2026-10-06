@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../ui/toastContext'
-import { weeksOf, type NewEvent } from './parse'
+import { isReplaced, type NewEvent } from './parse'
 
 export interface EventRow {
   id: string
@@ -10,7 +10,7 @@ export interface EventRow {
   start: string // HH:MM
   end: string // HH:MM
   room: string
-  kind: 'class' | 'event'
+  kind: 'class' | 'event' | 'exam'
 }
 
 interface DbRow {
@@ -20,7 +20,7 @@ interface DbRow {
   start_time: string
   end_time: string
   room: string
-  kind: 'class' | 'event'
+  kind: 'class' | 'event' | 'exam'
 }
 
 const fromDb = (r: DbRow): EventRow => ({
@@ -57,12 +57,10 @@ export function useEvents() {
     return () => void supabase.removeChannel(ch)
   }, [refetch])
 
-  /** Replace every class in the weeks touched by `incoming` with `incoming`. */
+  /** Replace the saved items that `incoming` covers (same weeks; exams are kept apart from classes and events). */
   const replaceWeeks = useCallback(
     async (incoming: NewEvent[]) => {
       const before = eventsRef.current
-      const weeks = weeksOf(incoming)
-      const inWeeks = (d: string) => weeks.some(([a, b]) => d >= a && d <= b)
       const optimistic: EventRow[] = incoming.map((e, i) => ({
         id: `tmp-${i}`,
         title: e.title,
@@ -72,10 +70,10 @@ export function useEvents() {
         room: e.room,
         kind: e.kind,
       }))
-      setEvents([...before.filter((e) => !inWeeks(e.date)), ...optimistic])
+      setEvents([...before.filter((e) => !isReplaced(e, incoming)), ...optimistic])
       try {
         // Insert first, then remove the old rows by id, so a failure never loses classes.
-        const oldIds = before.filter((e) => inWeeks(e.date)).map((e) => e.id)
+        const oldIds = before.filter((e) => isReplaced(e, incoming)).map((e) => e.id)
         const { error } = await supabase.from('events').insert(
           incoming.map((e) => ({ title: e.title, date: e.date, start_time: e.start, end_time: e.end, room: e.room, kind: e.kind })),
         )

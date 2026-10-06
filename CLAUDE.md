@@ -32,7 +32,7 @@ All task reads and writes go through one task-source layer in `src/tasks/` (Todo
 | Clean-diet answers | Supabase `diet` (one yes or no per day, answered on the Progress page only). The `marks` table exists but is unused: marks are not shown (decided 2026-10-05). |
 | Focus timer state and settings | Supabase `focus` (one row: the whole timer as JSON, with a `seq` that only goes up; the higher seq wins across devices). The timer logic is the pure state machine in `src/focus/machine.ts`. |
 | Focus log (one row per focus round, whole or partial) | Supabase `focus_sessions` |
-| Class and meeting events (entered weekly) | Supabase `events` |
+| Class, event and exam items (classes entered weekly) | Supabase `events` (kind class, event or exam; the weekly import never replaces exams) |
 | Vision images | Supabase Storage (private bucket `vision`, one folder per user) plus the `vision` table (caption, theme, width, height, `pinned_on`). Each image has a main copy `<user>/<id>.jpg` (at most 1600 px) and a grid copy `<user>/<id>-thumb.jpg` (at most 480 px), both made in the browser before upload. Shown only through short-lived signed links. |
 
 ## Invariants (never break these)
